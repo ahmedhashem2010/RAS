@@ -1,4 +1,6 @@
-// Idempotent seeding of the Volunteers Management System:
+// Idempotent seeding of the Volunteers Management System via the
+// Supabase JS client (REST + Auth Admin API). No /pg/query dependency.
+//
 //   1) ensures the 11 committees exist
 //   2) creates roster volunteers + their committee memberships
 //   3) creates committee leadership rows (leaders / deputies)
@@ -10,9 +12,7 @@
 // Usage:
 //   RAS_TEMP_PASSWORD="..." node scripts/seed-volunteers.mjs
 //
-// RAS_TEMP_PASSWORD must be provided (never committed). It is the single
-// temporary password all leader accounts start with; each leader must
-// change it on first login.
+// RAS_TEMP_PASSWORD must be provided (never committed).
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -57,135 +57,143 @@ const data = JSON.parse(
   readFileSync(resolve(root, "supabase/seed/volunteers.json"), "utf8"),
 );
 
-async function pg(query, parameters = []) {
-  const res = await fetch(`${url}/pg/query`, {
-    method: "POST",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query, parameters }),
-  });
-  const text = await res.text();
-  let body;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    body = { raw: text };
+// Service-role client: bypasses RLS for table operations and has auth admin access.
+const sb = createClient(url, serviceKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+
+function check(label, { data: d, error }) {
+  if (error) {
+    console.error(`  FAIL [${label}]:`, error.message);
+    throw new Error(`${label}: ${error.message}`);
   }
-  if (!res.ok) throw new Error(`PG ${res.status}: ${JSON.stringify(body)}`);
-  return body;
+  return d;
 }
 
-// ---------- Committees ----------
+// ─────────────────────────────────────────────────────
+// 1. COMMITTEES (departments)
+// ─────────────────────────────────────────────────────
 const deptBySlug = {};
+
 for (const d of data.committees) {
-  const rows = await pg("select id from public.departments where name_en = $1", [d.name_en]);
-  let id;
-  if (rows.length) {
-    id = rows[0].id;
+  const existing = check("dept-select",
+    await sb.from("departments").select("id").eq("name_en", d.name_en).maybeSingle(),
+  );
+  if (existing) {
+    deptBySlug[d.name_en] = existing.id;
   } else {
-    const ins = await pg(
-      "insert into public.departments (name, name_en, sort_order) values ($1, $2, $3) returning id",
-      [d.name, d.name_en, d.sort_order],
+    const row = check("dept-insert",
+      await sb.from("departments").insert({ name: d.name, name_en: d.name_en, sort_order: d.sort_order }).select("id").single(),
     );
-    id = ins[0].id;
-    console.log(`committee created: ${d.name} (${d.name_en})`);
+    deptBySlug[d.name_en] = row.id;
+    console.log(`  created: ${d.name} (${d.name_en})`);
   }
-  deptBySlug[d.name_en] = id;
 }
 console.log(`Departments ensured: ${Object.keys(deptBySlug).length}`);
 
-// ---------- Volunteers ----------
+// ─────────────────────────────────────────────────────
+// 2. VOLUNTEERS + COMMITTEE MEMBERSHIPS
+// ─────────────────────────────────────────────────────
 async function ensureVolunteer(committeeId, name) {
-  const existing = await pg(
-    `select v.id from public.volunteers v
-     join public.committee_members cm on cm.volunteer_id = v.id
-     where v.full_name = $1 and cm.committee_id = $2 limit 1`,
-    [name, committeeId],
+  // Find all volunteers with this full_name.
+  const vols = check("vol-by-name",
+    await sb.from("volunteers").select("id").eq("full_name", name),
   );
-  if (existing.length) return existing[0].id;
+  if (vols && vols.length) {
+    // Check if any are already in this committee.
+    const volIds = vols.map((v) => v.id);
+    const cm = check("cm-check",
+      await sb.from("committee_members").select("volunteer_id")
+        .eq("committee_id", committeeId)
+        .in("volunteer_id", volIds)
+        .limit(1),
+    );
+    if (cm && cm.length) return cm[0].volunteer_id;
+  }
 
-  const ins = await pg(
-    "insert into public.volunteers (full_name) values ($1) returning id",
-    [name],
+  // Volunteer does not exist in this committee — create.
+  const newVol = check("vol-insert",
+    await sb.from("volunteers").insert({ full_name: name }).select("id").single(),
   );
-  const vid = ins[0].id;
-  await pg(
-    "insert into public.committee_members (committee_id, volunteer_id) values ($1, $2)",
-    [committeeId, vid],
-  );
-  return vid;
+  const err2 = (await sb.from("committee_members").insert({ committee_id: committeeId, volunteer_id: newVol.id })).error;
+  if (err2) throw new Error(`committee_members insert: ${err2.message}`);
+  return newVol.id;
 }
 
-let createdVolunteers = 0;
+let rosterCount = 0;
 for (const [slug, names] of Object.entries(data.volunteers)) {
   const committeeId = deptBySlug[slug];
   for (const name of names) {
     await ensureVolunteer(committeeId, name);
   }
-  createdVolunteers += names.length;
+  rosterCount += names.length;
 }
-console.log(`Volunteer rosters ensured (${createdVolunteers} rows across committees)`);
+console.log(`Volunteer rosters ensured (${rosterCount} rows across committees)`);
 
-// ---------- Leadership ----------
+// ─────────────────────────────────────────────────────
+// 3. LEADERSHIP
+// ─────────────────────────────────────────────────────
 for (const l of data.leaders) {
   const committeeId = deptBySlug[l.committee];
-  const vid = await ensureVolunteer(committeeId, l.name);
-  await pg(
-    `insert into public.committee_leaders (committee_id, leader_id, is_deputy)
-     values ($1, $2, $3)
-     on conflict (committee_id, leader_id)
-     do update set is_deputy = excluded.is_deputy`,
-    [committeeId, vid, l.role === "deputy"],
+  const leaderId = await ensureVolunteer(committeeId, l.name);
+
+  // Upsert: insert or update is_deputy on conflict (committee_id, leader_id).
+  const existing = check("lead-check",
+    await sb.from("committee_leaders").select("committee_id")
+      .eq("committee_id", committeeId).eq("leader_id", leaderId).maybeSingle(),
   );
+  if (existing) {
+    await sb.from("committee_leaders").update({ is_deputy: l.role === "deputy" })
+      .eq("committee_id", committeeId).eq("leader_id", leaderId);
+  } else {
+    await sb.from("committee_leaders").insert({
+      committee_id: committeeId,
+      leader_id: leaderId,
+      is_deputy: l.role === "deputy",
+    });
+  }
 }
 console.log(`Leadership rows ensured: ${data.leaders.length}`);
 
-// ---------- Leader accounts ----------
-const admin = createClient(url, serviceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-
+// ─────────────────────────────────────────────────────
+// 4. LEADER AUTH ACCOUNTS
+// ─────────────────────────────────────────────────────
 async function findProfileByEmail(email) {
-  const rows = await pg("select id from public.profiles where email = $1 limit 1", [email]);
-  return rows.length ? rows[0].id : null;
+  return check("profile-email",
+    await sb.from("profiles").select("id").eq("email", email).maybeSingle(),
+  );
 }
 
 async function createAccount(username, name) {
   const email = `${username}@ras.local`;
-  const existingProfileId = await findProfileByEmail(email);
-  if (existingProfileId) {
-    return { profileId: existingProfileId, created: false };
-  }
-  const { data, error } = await admin.auth.admin.createUser({
+  const existing = await findProfileByEmail(email);
+  if (existing) return { profileId: existing.id, created: false };
+
+  const { data: userData, error } = await sb.auth.admin.createUser({
     email,
     password: tempPassword,
     email_confirm: true,
     user_metadata: { full_name: name },
   });
   if (error) {
-    // A race or a user created without a profile -> handle gracefully.
-    const again = await findProfileByEmail(email);
-    if (again) return { profileId: again, created: false };
+    // Race or orphaned profile — check again.
+    const retry = await findProfileByEmail(email);
+    if (retry) return { profileId: retry.id, created: false };
     throw new Error(`createUser failed for ${email}: ${error.message}`);
   }
-  await pg("update public.profiles set must_change_password = true where id = $1", [data.user.id]);
-  return { profileId: data.user.id, created: true };
+
+  // Mark must_change_password (profile created by handle_new_user trigger).
+  await sb.from("profiles").update({ must_change_password: true }).eq("id", userData.user.id);
+  return { profileId: userData.user.id, created: true };
 }
 
-// Pass A: create/collect accounts, keyed by full name (one account per person).
+// Pass A: create/collect accounts (one per unique person, keyed by name).
 const accountsByName = {};
 for (const l of data.leaders) {
-  if (!l.username) continue; // deputy of a leader who has an account via another row
+  if (!l.username) continue;
   const { profileId, created } = await createAccount(l.username, l.name);
   accountsByName[l.name] = accountsByName[l.name] || { profileId, created };
-  if (created) {
-    console.log(`account created: ${l.username}@ras.local (${l.name})`);
-  } else {
-    console.log(`account already exists: ${l.username}@ras.local (${l.name})`);
-  }
+  console.log(`  ${created ? "created" : "exists"}: ${l.username}@ras.local (${l.name})`);
 }
 
 // Pass B: link every leadership roster row to that person's profile.
@@ -194,27 +202,83 @@ for (const l of data.leaders) {
   const acc = accountsByName[l.name];
   if (!acc) continue;
   const committeeId = deptBySlug[l.committee];
-  const vid = await pg(
-    `select v.id from public.volunteers v
-     join public.committee_members cm on cm.volunteer_id = v.id
-     where v.full_name = $1 and cm.committee_id = $2 limit 1`,
-    [l.name, committeeId],
+
+  // Find the volunteer row for this person in this committee.
+  const vols = check("vol-link",
+    await sb.from("volunteers").select("id").eq("full_name", l.name),
   );
-  if (!vid.length) continue;
-  await pg("update public.volunteers set profile_id = $1 where id = $2", [acc.profileId, vid[0].id]);
-  linked += 1;
+  if (!vols || !vols.length) continue;
+
+  for (const v of vols) {
+    const cm = check("cm-link",
+      await sb.from("committee_members").select("volunteer_id")
+        .eq("committee_id", committeeId).eq("volunteer_id", v.id).maybeSingle(),
+    );
+    if (cm) {
+      await sb.from("volunteers").update({ profile_id: acc.profileId }).eq("id", v.id);
+      linked++;
+      break;
+    }
+  }
 }
 console.log(`Leader roster rows linked to accounts: ${linked}`);
 
-// ---------- Summary ----------
-const totals = await pg(
-  `select
-     (select count(*) from public.volunteers) as volunteers,
-     (select count(*) from public.committee_members) as memberships,
-     (select count(*) from public.committee_leaders) as leadership,
-     (select count(*) from public.departments) as departments,
-     (select count(*) from public.profiles where role in ('general_admin','super_admin')) as admins`,
+// ─────────────────────────────────────────────────────
+// 5. VERIFY — query live database and report real counts
+// ─────────────────────────────────────────────────────
+async function count(table, opts = {}) {
+  let q = sb.from(table).select("*", { count: "exact", head: true });
+  if (opts.filter) {
+    for (const [col, val] of Object.entries(opts.filter)) {
+      if (Array.isArray(val)) q = q.in(col, val);
+      else q = q.eq(col, val);
+    }
+  }
+  const { count: c, error } = await q;
+  if (error) throw new Error(`count ${table}: ${error.message}`);
+  return c;
+}
+
+const departments = await count("departments");
+const volunteers = await count("volunteers");
+const memberships = await count("committee_members");
+const leadership = await count("committee_leaders");
+const admins = await count("profiles", { filter: { role: ["general_admin", "super_admin"] } });
+
+// Count unique leader accounts (auth users with @ras.local email).
+const { data: authUsers, error: listErr } = await sb.auth.admin.listUsers();
+if (listErr) throw new Error(`listUsers: ${listErr.message}`);
+const leaderAccounts = authUsers.users.filter((u) => u.email?.endsWith("@ras.local"));
+
+console.log("\n=== SEED SUMMARY (live DB) ===");
+console.log(`  departments:         ${departments}`);
+console.log(`  volunteers:          ${volunteers}`);
+console.log(`  committee_members:   ${memberships}`);
+console.log(`  committee_leaders:   ${leadership}`);
+console.log(`  leader accounts:     ${leaderAccounts.length}`);
+console.log(`  profiles (admins):   ${admins}`);
+
+// Per-committee leadership breakdown
+const { data: leadRows } = await sb.from("committee_leaders")
+  .select("committee_id, is_deputy, volunteers(full_name), departments(name_en)");
+if (leadRows) {
+  console.log("\n=== LEADERSHIP BY COMMITTEE ===");
+  const byCommittee = {};
+  for (const r of leadRows) {
+    const slug = r.departments?.name_en || r.committee_id;
+    if (!byCommittee[slug]) byCommittee[slug] = [];
+    byCommittee[slug].push(`${r.volunteers?.full_name || "?"} (${r.is_deputy ? "deputy" : "leader"})`);
+  }
+  for (const [slug, names] of Object.entries(byCommittee).sort()) {
+    console.log(`  ${slug}: ${names.join(", ")}`);
+  }
+}
+
+// Verify حاتم سامح has exactly ONE account
+const hatemAccounts = leaderAccounts.filter((u) =>
+  u.email === "ras_doctors_leader_2@ras.local" ||
+  u.user_metadata?.full_name === "د. حاتم سامح",
 );
-console.log("\n=== SEED SUMMARY ===");
-console.log(totals[0]);
+console.log(`\nحاتم سامح accounts: ${hatemAccounts.length} (${hatemAccounts.map((u) => u.email).join(", ") || "none"})`);
+
 console.log("\nDone. Leader temporary password is shared (RAS_TEMP_PASSWORD); each account must change it on first login.");
