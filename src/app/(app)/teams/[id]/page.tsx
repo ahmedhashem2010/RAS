@@ -73,7 +73,7 @@ export default async function TeamDetailPage({
         action={
           <Link href="/teams" className="inline-flex h-10 items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900">
             <ArrowRight className="h-4 w-4" />
-            كل الفرق
+            كل المجموعات
           </Link>
         }
       />
@@ -84,7 +84,7 @@ export default async function TeamDetailPage({
           {teamStat && (
             <Card>
               <CardHeader>
-                <CardTitle>نشاط الفريق</CardTitle>
+                <CardTitle>نشاط المجموعة</CardTitle>
                 <Badge tone="teal">{teamStat.activity_score}%</Badge>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
@@ -129,7 +129,7 @@ export default async function TeamDetailPage({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-brand-600" />
-                قادة الفريق
+                قادة المجموعة
               </CardTitle>
               {canManage && <TeamManagePanel teamId={id} mode="leader" />}
             </CardHeader>
@@ -174,7 +174,7 @@ export default async function TeamDetailPage({
               {members.length === 0 ? (
                 <EmptyState
                   title="لا يوجد أعضاء بعد"
-                  description="أضف متطوعين إلى الفريق."
+                  description="أضف متطوعين إلى المجموعة."
                 />
               ) : (
                 <div className="divide-y divide-slate-50">
@@ -208,7 +208,7 @@ export default async function TeamDetailPage({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Star className="h-4 w-4 text-gold-500" />
-                لوحة ترتيب الفريق
+                لوحة ترتيب المجموعة
               </CardTitle>
               <Link href={`/leaderboard?team=${id}`} className="text-xs font-semibold text-brand-700 hover:text-brand-800">
                 العرض الكامل

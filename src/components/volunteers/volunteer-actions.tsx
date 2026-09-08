@@ -186,7 +186,7 @@ export function VolunteerActions({ profile, warningLimit }: { profile: Profile; 
             </Select>
           </Field>
           <p className="rounded-lg bg-brand-50 px-4 py-3 text-xs text-slate-600">
-            مدير عام + قائد فريق مسموح به — المدير الذي يقود فريقاً يمكنه ترشيح نفسه لجائزة أفضل قائد.
+            مدير عام + قائد مجموعة مسموح به — المدير الذي يقود مجموعة يمكنه ترشيح نفسه لجائزة أفضل قائد.
           </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setModal(null)}>إلغاء</Button>

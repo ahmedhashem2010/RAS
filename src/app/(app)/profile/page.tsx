@@ -81,10 +81,10 @@ export default async function ProfilePage() {
         <CardContent>
           <div className="mb-3 flex items-center gap-2">
             <UserRound className="h-4 w-4 text-brand-700" />
-            <h3 className="text-sm font-bold text-slate-800">الفرق المنتمي لها وترتيبي</h3>
+            <h3 className="text-sm font-bold text-slate-800">المجموعات المنتمي لها وترتيبي</h3>
           </div>
           {teams.length === 0 ? (
-            <p className="text-sm text-slate-400">أنت لست عضواً في أي فريق بعد.</p>
+            <p className="text-sm text-slate-400">أنت لست عضواً في أي مجموعة بعد.</p>
           ) : (
             <div className="space-y-3">
               {teams.map((t) => {

@@ -12,13 +12,13 @@ function friendly(error: unknown, fallback: string): ActionResult {
     return { ok: false, error: "ليس لديك صلاحية للقيام بهذا الإجراء." };
   }
   if (msg.includes("not a member of the task team")) {
-    return { ok: false, error: "يمكن تعيين عضو من الفريق فقط." };
+return { ok: false, error: "يمكن تعيين عضو من المجموعة فقط." };
   }
   if (msg.includes("non-active volunteer") || msg.includes("does not exist")) {
     return { ok: false, error: "لا يمكن تعيين حساب موقوف أو غير نشط." };
   }
   if (msg.includes("Only a leader of the task team")) {
-    return { ok: false, error: "صلاحية إنشاء مهمة لهذا الفريق مطلوبة." };
+    return { ok: false, error: "صلاحية إنشاء مهمة لهذه المجموعة مطلوبة." };
   }
   console.error("[tasks]", error);
   return { ok: false, error: fallback };
@@ -43,7 +43,7 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
     return { ok: false, error: "الموعد النهائي غير صحيح." };
   }
   if (!user.isAdmin && !(input.teamId && user.ledTeamIds.includes(input.teamId))) {
-    return { ok: false, error: "صلاحية إنشاء مهمة لهذا الفريق مطلوبة." };
+    return { ok: false, error: "صلاحية إنشاء مهمة لهذه المجموعة مطلوبة." };
   }
 
   const { data: task, error: taskErr } = await supabase
@@ -81,7 +81,7 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
         .eq("team_id", input.teamId)
         .eq("volunteer_id", input.assignTo)
         .maybeSingle();
-      if (!member) return { ok: false, error: "يمكن تعيين عضو من الفريق فقط." };
+      if (!member) return { ok: false, error: "يمكن تعيين عضو من المجموعة فقط." };
     }
     volunteerIds = [input.assignTo];
   } else {

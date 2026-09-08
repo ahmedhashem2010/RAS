@@ -10,7 +10,7 @@ export type ActionResult = { ok: boolean; error?: string };
 function friendly(error: unknown, fallback: string): ActionResult {
   const msg = error instanceof Error ? error.message : "";
   if (msg.includes("cannot lead more than one team")) {
-    return { ok: false, error: "لا يمكن تعيين الشخص قائداً لفريقين مختلفين." };
+    return { ok: false, error: "لا يمكن تعيين الشخص قائداً لمجموعتين مختلفتين." };
   }
   if (msg.includes("duplicate key")) {
     return { ok: false, error: "سجل مكرر — تأكد من عدم التكرار." };
@@ -19,10 +19,10 @@ function friendly(error: unknown, fallback: string): ActionResult {
     return { ok: false, error: "ليس لديك صلاحية للقيام بهذا الإجراء." };
   }
   if (msg.includes("cannot remove an admin")) {
-    return { ok: false, error: "لا يمكن لقائد الفريق إزالة مدير." };
+    return { ok: false, error: "لا يمكن لقائد المجموعة إزالة مدير." };
   }
   if (msg.includes("at least one leader")) {
-    return { ok: false, error: "يجب أن يبقى قائد واحد على الأقل في الفريق." };
+    return { ok: false, error: "يجب أن يبقى قائد واحد على الأقل في المجموعة." };
   }
   console.error("[teams]", error);
   return { ok: false, error: fallback };
@@ -47,14 +47,14 @@ export async function createTeam(formData: FormData): Promise<ActionResult> {
   const color = String(formData.get("color") ?? "#0d9488");
   const evalMode = String(formData.get("evalMode") ?? "attendance");
 
-  if (name.length < 2) return { ok: false, error: "اسم الفريق مطلوب." };
+  if (name.length < 2) return { ok: false, error: "اسم المجموعة مطلوب." };
 
   const { data, error } = await supabase
     .from("teams")
     .insert({ name, description, color, eval_mode: evalMode })
     .select("id")
     .single();
-  if (error) return friendly(error, "حدث خطأ أثناء إنشاء الفريق.");
+  if (error) return friendly(error, "حدث خطأ أثناء إنشاء المجموعة.");
 
   await logAudit("team_created", "team", data.id, { by: user.id });
   revalidatePath("/teams");
@@ -75,7 +75,7 @@ export async function updateTeam(id: string, formData: FormData): Promise<Action
     .from("teams")
     .update({ name, description, color, eval_mode: evalMode })
     .eq("id", id);
-  if (error) return friendly(error, "حدث خطأ أثناء تعديل الفريق.");
+  if (error) return friendly(error, "حدث خطأ أثناء تعديل المجموعة.");
 
   await logAudit("team_updated", "team", id, { by: user.id });
   revalidatePath("/teams");
@@ -88,7 +88,7 @@ export async function deleteTeam(id: string): Promise<ActionResult> {
   if (!user?.isAdmin) return { ok: false, error: "صلاحية المدير مطلوبة." };
   const supabase = await createClient();
   const { error } = await supabase.from("teams").delete().eq("id", id);
-  if (error) return friendly(error, "حدث خطأ أثناء حذف الفريق.");
+  if (error) return friendly(error, "حدث خطأ أثناء حذف المجموعة.");
   await logAudit("team_deleted", "team", id, { by: user.id });
   revalidatePath("/teams");
   return { ok: true };
@@ -138,7 +138,7 @@ export async function assignLeader(teamId: string, leaderId: string): Promise<Ac
       .eq("team_id", teamId)
       .eq("volunteer_id", leaderId)
       .maybeSingle();
-    if (!member) return { ok: false, error: "يمكن تعيين عضو من الفريق فقط كقائد." };
+    if (!member) return { ok: false, error: "يمكن تعيين عضو من المجموعة فقط كقائد." };
   }
 
   const { error } = await supabase
@@ -165,7 +165,7 @@ export async function removeLeader(teamId: string, leaderId: string): Promise<Ac
     .maybeSingle();
   if (!target) return { ok: false, error: "القائد غير موجود." };
   if (!user.isAdmin && (target.role === "general_admin" || target.role === "super_admin")) {
-    return { ok: false, error: "لا يمكن لقائد الفريق إزالة مدير." };
+    return { ok: false, error: "لا يمكن لقائد المجموعة إزالة مدير." };
   }
 
   // A leader removing themselves must not leave the team without any leader.
@@ -176,7 +176,7 @@ export async function removeLeader(teamId: string, leaderId: string): Promise<Ac
       .eq("team_id", teamId)
       .neq("leader_id", user.id);
     if ((others ?? []).length === 0) {
-      return { ok: false, error: "يجب أن يبقى قائد واحد على الأقل في الفريق." };
+      return { ok: false, error: "يجب أن يبقى قائد واحد على الأقل في المجموعة." };
     }
   }
 
@@ -207,14 +207,14 @@ export async function leaveTeam(teamId: string): Promise<ActionResult> {
     .eq("team_id", teamId)
     .eq("volunteer_id", user.id)
     .maybeSingle();
-  if (!member) return { ok: false, error: "أنت لست عضواً في هذا الفريق." };
+  if (!member) return { ok: false, error: "أنت لست عضواً في هذه المجموعة." };
 
   const { error } = await supabase
     .from("team_members")
     .delete()
     .eq("team_id", teamId)
     .eq("volunteer_id", user.id);
-  if (error) return friendly(error, "حدث خطأ أثناء مغادرة الفريق.");
+  if (error) return friendly(error, "حدث خطأ أثناء مغادرة المجموعة.");
 
   await logAudit("member_left_team", "team", teamId, { by: user.id });
   revalidatePath(`/teams/${teamId}`);

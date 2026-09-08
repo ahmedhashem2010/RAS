@@ -58,7 +58,7 @@ export default async function TaskDetailPage({
   }));
 
   const myAssignment = assignments.find((a) => a.volunteer_id === user.id) ?? null;
-  const teamName = (teamRes.data as { name?: string } | null)?.name ?? "فريق";
+  const teamName = (teamRes.data as { name?: string } | null)?.name ?? "مجموعة";
 
   return (
     <div className="mx-auto max-w-3xl">

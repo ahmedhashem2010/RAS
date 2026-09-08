@@ -102,7 +102,7 @@ export function VolunteersList({
                 <StatusBadge status={r.status} />
               </div>
               <p className="mt-0.5 truncate text-xs text-slate-400">
-                {r.teams.length > 0 ? r.teams.join(" · ") : "بدون فريق"}
+                {r.teams.length > 0 ? r.teams.join(" · ") : "بدون مجموعة"}
                 {r.email ? ` · ${r.email}` : ""}
               </p>
             </div>

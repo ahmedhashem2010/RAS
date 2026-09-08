@@ -85,7 +85,7 @@ export async function AdminDashboard() {
       {/* Overview cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard icon={Users} label="إجمالي المتطوعين" value={overview.totalVolunteers} tone="teal" hint={`${overview.activeVolunteers} نشط`} />
-        <StatCard icon={Truck} label="فرق العمل" value={overview.totalTeams} tone="blue" />
+        <StatCard icon={Truck} label="مجموعات العمل" value={overview.totalTeams} tone="blue" />
         <StatCard icon={Gauge} label="متوسط نقاط المتطوعين" value={overview.avgScore} tone="slate" hint="من 100" />
         <StatCard icon={Trophy} label="الجوائز" value={overview.totalAwards} tone="gold" />
         <StatCard icon={ShieldAlert} label="إنذارات نشطة" value={overview.activeWarnings} tone="red" hint={`من ${overview.warningLimit - 1} إلى ${overview.warningLimit} إنذارات`} />
@@ -98,7 +98,7 @@ export async function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-brand-600" />
-              نشاط الفرق
+              نشاط المجموعات
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

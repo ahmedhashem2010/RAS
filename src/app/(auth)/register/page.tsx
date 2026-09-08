@@ -40,7 +40,7 @@ export default function RegisterPage() {
 
       <h1 className="text-2xl font-extrabold text-slate-900">إنشاء حساب</h1>
       <p className="mt-1 text-sm text-slate-500">
-        انضم كمتطوع — سيقوم مدير النظام بإضافتك للفرق
+        انضم كمتطوع — سيقوم مدير النظام بإضافتك للمجموعات
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">

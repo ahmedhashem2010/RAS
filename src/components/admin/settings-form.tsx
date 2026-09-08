@@ -80,7 +80,7 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
           checked={visibleToAll}
           onChange={setVisibleToAll}
           label="إظهار لوحة الترتيب للجميع"
-          hint="عند التفعيل يمكن لكل المتطوعين رؤية ترتيب كل الفرق. عند الإيقاف تظهر التفاصيل للمديرين والقادة فقط."
+          hint="عند التفعيل يمكن لكل المتطوعين رؤية ترتيب كل المجموعات. عند الإيقاف تظهر التفاصيل للمديرين والقادة فقط."
         />
       </div>
 

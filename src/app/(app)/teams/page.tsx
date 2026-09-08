@@ -32,14 +32,14 @@ export default async function TeamsPage() {
   return (
     <div>
       <PageHeader
-        title="الفرق"
-        description="إدارة فرق العمل وأعضائها وقادتها"
+        title="مجموعات العمل"
+        description="إدارة مجموعات العمل وأعضائها وقادتها"
         action={
           canManage ? (
             <Link href="/teams/new">
               <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
                 <Plus className="h-4 w-4" />
-                فريق جديد
+                مجموعة عمل جديدة
               </span>
             </Link>
           ) : undefined
@@ -49,8 +49,8 @@ export default async function TeamsPage() {
       {activity.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="لا توجد فرق بعد"
-          description="سيقوم مدير النظام بإنشاء الفرق."
+          title="لا توجد مجموعات عمل بعد"
+          description="سيقوم مدير النظام بإنشاء مجموعات العمل."
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

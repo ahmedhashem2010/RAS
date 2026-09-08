@@ -148,7 +148,7 @@ export async function VolunteerDashboard({ user }: { user: AuthedUser }) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-gold-500" />
-                ترتيبي في الفريق
+                ترتيبي في المجموعة
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -269,7 +269,7 @@ export async function VolunteerDashboard({ user }: { user: AuthedUser }) {
         {boards.map(({ team, board }) => (
           <Card key={team.id}>
             <CardHeader>
-              <CardTitle>ترتيب فريق {team.name}</CardTitle>
+              <CardTitle>ترتيب مجموعة {team.name}</CardTitle>
               <Link href={`/leaderboard?team=${team.id}`} className="flex items-center text-xs font-semibold text-brand-700 hover:text-brand-800">
                 عرض الكل <ChevronLeft className="h-3.5 w-3.5" />
               </Link>

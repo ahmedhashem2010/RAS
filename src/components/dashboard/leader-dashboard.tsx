@@ -18,11 +18,11 @@ export async function LeaderDashboard({ user }: { user: SessionUser }) {
   if (!teamId) {
     return (
       <div>
-        <PageHeader title="لوحة التحكم" description="إدارة فريقك بسرعة من هاتفك" />
+        <PageHeader title="لوحة التحكم" description="إدارة مجموعتك بسرعة من هاتفك" />
         <EmptyState
           icon={Users}
-          title="لم يتم تعيينك كقائد لأي فريق بعد"
-          description="تواصل مع مدير النظام لتعيينك قائداً لفريق."
+          title="لم يتم تعيينك كقائد لأي مجموعة بعد"
+          description="تواصل مع مدير النظام لتعيينك قائداً لمجموعة."
         />
       </div>
     );
@@ -86,8 +86,8 @@ export async function LeaderDashboard({ user }: { user: SessionUser }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`فريق ${team.name}`}
-        description="إدارة فريقك بسرعة من أي مكان"
+        title={`مجموعة ${team.name}`}
+        description="إدارة مجموعتك بسرعة من أي مكان"
         action={
           <Link href={`/tasks/new?team=${teamId}`}>
             <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
@@ -109,7 +109,7 @@ export async function LeaderDashboard({ user }: { user: SessionUser }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { href: `/tasks/new?team=${teamId}`, label: "إنشاء مهمة", icon: Plus, tone: "bg-brand-700 text-white" },
-          { href: `/teams/${teamId}`, label: "أعضاء الفريق", icon: Users, tone: "bg-blue-600 text-white" },
+          { href: `/teams/${teamId}`, label: "أعضاء المجموعة", icon: Users, tone: "bg-blue-600 text-white" },
           { href: `/leaderboard?team=${teamId}`, label: "لوحة الترتيب", icon: Star, tone: "bg-amber-500 text-white" },
         ].map((a) => (
           <Link

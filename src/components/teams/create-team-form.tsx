@@ -40,7 +40,7 @@ export function CreateTeamForm() {
       setLoading(false);
       return;
     }
-    toast("success", "تم إنشاء الفريق");
+    toast("success", "تم إنشاء مجموعة العمل");
     router.push(`/teams/${(res as { id?: string }).id}`);
     router.refresh();
   }
@@ -48,8 +48,8 @@ export function CreateTeamForm() {
   return (
     <>
       <PageHeader
-        title="إنشاء فريق جديد"
-        description="أضف فريق عمل جديد للمنظمة"
+        title="إنشاء مجموعة عمل جديدة"
+        description="أضف مجموعة عمل جديدة للمنظمة"
         action={
           <button
             onClick={() => router.back()}
@@ -63,7 +63,7 @@ export function CreateTeamForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>بيانات الفريق</CardTitle>
+          <CardTitle>بيانات مجموعة العمل</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -73,15 +73,15 @@ export function CreateTeamForm() {
               </div>
             )}
 
-            <Field label="اسم الفريق" required>
-              <Input name="name" placeholder="مثال: فريق الإعلام" required minLength={2} />
+            <Field label="اسم المجموعة" required>
+              <Input name="name" placeholder="مثال: مجموعة الإعلام" required minLength={2} />
             </Field>
 
-            <Field label="وصف الفريق">
+            <Field label="وصف المجموعة">
               <Textarea
                 name="description"
                 rows={3}
-                placeholder="وصف مختصر لطبيعة عمل الفريق (اختياري)"
+                placeholder="وصف مختصر لطبيعة عمل المجموعة (اختياري)"
               />
             </Field>
 
@@ -116,7 +116,7 @@ export function CreateTeamForm() {
                 إلغاء
               </Button>
               <Button type="submit" loading={loading}>
-                إنشاء الفريق
+                إنشاء مجموعة العمل
               </Button>
             </div>
           </form>

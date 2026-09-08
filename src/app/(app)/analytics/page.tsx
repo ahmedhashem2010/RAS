@@ -26,7 +26,7 @@ export default async function AnalyticsPage() {
     <div>
       <PageHeader
         title="التحليلات"
-        description="نظرة عامة على نشاط الفرق والمتطوعين"
+        description="نظرة عامة على نشاط المجموعات والمتطوعين"
       />
 
       {/* Top stats */}
@@ -40,7 +40,7 @@ export default async function AnalyticsPage() {
       {/* Team activity */}
       <Card>
         <CardHeader>
-          <CardTitle>نشاط الفرق</CardTitle>
+          <CardTitle>نشاط المجموعات</CardTitle>
           <Badge tone="slate">درجة النشاط</Badge>
         </CardHeader>
         <CardContent className="p-0">

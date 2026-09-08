@@ -91,7 +91,7 @@ export default async function TasksPage({
         description={
           isVolunteerView
             ? "تتبع وتسليم مهامك"
-            : "إدارة المهام العادية للفرق — القوافل تُدار من صفحة القوافل"
+            : "إدارة المهام العادية للمجموعات — القوافل تُدار من صفحة القوافل"
         }
         action={
           canCreate ? (
@@ -115,7 +115,7 @@ export default async function TasksPage({
                 : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
             }`}
           >
-            كل الفرق
+            كل المجموعات
           </Link>
           {(teams ?? []).map((t) => (
             <Link
@@ -139,8 +139,8 @@ export default async function TasksPage({
           title={isVolunteerView ? "لا توجد مهام مكلفة لك" : "لا توجد مهام بعد"}
           description={
             isVolunteerView
-              ? "عندما يكلفك قائد فريقك بمهمة ستظهر هنا."
-              : "أنشئ مهمة جديدة لفريقك — تُعرض لكل أعضاء الفريق."
+              ? "عندما يكلفك قائد مجموعتك بمهمة ستظهر هنا."
+              : "أنشئ مهمة جديدة لمجموعتك — تُعرض لكل أعضاء المجموعة."
           }
           action={
             canCreate ? (

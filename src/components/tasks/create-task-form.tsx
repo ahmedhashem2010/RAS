@@ -52,7 +52,7 @@ export function CreateTaskForm({
     <>
       <PageHeader
         title="مهمة جديدة"
-        description="المهام العادية تُدار من قادة الفرق — القوافل لها صفحة منفصلة"
+        description="المهام العادية تُدار من قادة المجموعات — القوافل لها صفحة منفصلة"
         action={
           <button
             onClick={() => router.back()}
@@ -79,7 +79,7 @@ export function CreateTaskForm({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="الفريق" required>
+              <Field label="المجموعة" required>
                 <Select
                   value={teamId}
                   onChange={(e) => setTeamId(e.target.value)}
@@ -100,7 +100,7 @@ export function CreateTaskForm({
 
             <Field label="التعيين">
               <Select value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
-                <option value="all">كل فريق {teams.find((t) => t.id === teamId)?.name ?? ""}</option>
+                <option value="all">كل مجموعة {teams.find((t) => t.id === teamId)?.name ?? ""}</option>
                 {volunteers.map((v) => (
                   <option key={v.id} value={v.id}>
                     متطوع: {v.full_name}
@@ -111,7 +111,7 @@ export function CreateTaskForm({
 
             {assignTo === "all" && (
               <p className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                المهمة ستُعرض لكل أعضاء الفريق المختار، وسيرسل كل متطوع إنجازاً منفصلاً.
+                المهمة ستُعرض لكل أعضاء المجموعة المختارة، وسيرسل كل متطوع إنجازاً منفصلاً.
               </p>
             )}
 

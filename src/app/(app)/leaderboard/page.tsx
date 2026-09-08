@@ -60,8 +60,8 @@ export default async function LeaderboardPage({
       {visibleTeams.length === 0 ? (
         <EmptyState
           icon={Star}
-          title="أنت لست عضواً في أي فريق بعد"
-          description="سيظهر ترتيب فريقك هنا فور انضمامك."
+          title="أنت لست عضواً في أي مجموعة بعد"
+          description="سيظهر ترتيب مجموعتك هنا فور انضمامك."
         />
       ) : (
         <>
@@ -125,7 +125,7 @@ export default async function LeaderboardPage({
 
           {!canSeeDetails && (
             <p className="mt-3 text-center text-xs text-slate-400">
-              تظهر التفاصيل الكاملة للأداء للمديرين وقادة الفرق فقط.
+              تظهر التفاصيل الكاملة للأداء للمديرين وقادة المجموعات فقط.
             </p>
           )}
         </>

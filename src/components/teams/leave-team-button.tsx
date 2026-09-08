@@ -19,10 +19,10 @@ export function LeaveTeamButton({ teamId }: { teamId: string }) {
     const res = await leaveTeam(teamId);
     setLoading(false);
     if (!res.ok) {
-      toast("error", "تعذر مغادرة الفريق", res.error);
+      toast("error", "تعذر مغادرة المجموعة", res.error);
       return;
     }
-    toast("success", "تمت مغادرة الفريق");
+    toast("success", "تمت مغادرة المجموعة");
     setOpen(false);
     router.push("/teams");
     router.refresh();
@@ -32,14 +32,14 @@ export function LeaveTeamButton({ teamId }: { teamId: string }) {
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <LogOut className="h-4 w-4" />
-        مغادرة الفريق
+        مغادرة المجموعة
       </Button>
 
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="مغادرة الفريق"
-        description="هل أنت متأكد من مغادرة هذا الفريق؟"
+        title="مغادرة المجموعة"
+        description="هل أنت متأكد من مغادرة هذه المجموعة؟"
         footer={
           <>
             <Button variant="secondary" onClick={() => setOpen(false)}>
@@ -47,7 +47,7 @@ export function LeaveTeamButton({ teamId }: { teamId: string }) {
             </Button>
             <Button variant="danger" onClick={handleLeave} loading={loading}>
               <LogOut className="h-4 w-4" />
-              مغادرة الفريق
+              مغادرة المجموعة
             </Button>
           </>
         }

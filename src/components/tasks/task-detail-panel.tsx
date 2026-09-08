@@ -221,13 +221,13 @@ export function TaskDetailPanel({
 
               {isMine && a.status === "rejected" && !canManage && (
                 <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                  رُفضت هذه المهمة — يمكن لقائد الفريق السماح بإعادة التسليم.
+                  رُفضت هذه المهمة — يمكن لقائد المجموعة السماح بإعادة التسليم.
                 </p>
               )}
 
               {isRejectedThenReopened && isMine && (
                 <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  قائد الفريق سمح لك بإعادة التسليم — سجّل الدليل واختر تسليم.
+                  قائد المجموعة سمح لك بإعادة التسليم — سجّل الدليل واختر تسليم.
                 </div>
               )}
             </div>
