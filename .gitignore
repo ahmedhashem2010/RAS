@@ -44,6 +44,14 @@ yarn-error.log*
 # generated service worker (built by serwist from src/app/sw.ts)
 /public/sw.js
 
+# one-off DB probe scripts (local dev only; use apply-one.mjs instead)
+/scripts/cleanup-probes.mjs
+/scripts/investigate-leadership.mjs
+/scripts/ledcomms.mjs
+
+# supabase local temp artifacts
+/supabase/.temp/
+
 # vercel
 .vercel
 
