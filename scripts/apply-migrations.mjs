@@ -117,7 +117,3 @@ for (const file of files) {
 }
 
 console.log("\nAll migrations applied.");
-
-function baseName(f) {
-  return f.split(/[\\/]/).pop();
-}
