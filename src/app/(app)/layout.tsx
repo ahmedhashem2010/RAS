@@ -3,6 +3,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
+import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
 import { HeartHandshake } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
@@ -20,6 +21,13 @@ export default async function AppLayout({
         <Sidebar user={user} />
 
         <div className="lg:pr-64">
+          {user.impersonating && (
+            <ImpersonationBanner
+              leaderName={user.impersonating.leaderName}
+              committeeName={user.impersonating.committeeName}
+            />
+          )}
+
           {/* Mobile top bar */}
           <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
             <Link href="/dashboard" className="flex items-center gap-2">

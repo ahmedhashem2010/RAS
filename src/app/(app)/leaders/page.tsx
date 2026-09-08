@@ -4,6 +4,7 @@ import { getAllCommitteesWithLeaders } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ImpersonateButton } from "@/components/admin/impersonate-button";
 import { Crown, ChevronLeft } from "lucide-react";
 import { committeeRoleLabels } from "@/lib/i18n";
 
@@ -71,13 +72,22 @@ export default async function LeadersPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-left">
-                        <Link
-                          href={l.profileId ? `/volunteers/${l.profileId}` : `/volunteers/v/${l.volunteerId}`}
-                          className="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800"
-                        >
-                          عرض
-                          <ChevronLeft className="h-4 w-4" />
-                        </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          {l.profileId && (
+                            <ImpersonateButton
+                              profileId={l.profileId}
+                              committeeId={l.committee.id}
+                              committeeName={l.committee.name}
+                            />
+                          )}
+                          <Link
+                            href={l.profileId ? `/volunteers/${l.profileId}` : `/volunteers/v/${l.volunteerId}`}
+                            className="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800"
+                          >
+                            عرض
+                            <ChevronLeft className="h-4 w-4" />
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
