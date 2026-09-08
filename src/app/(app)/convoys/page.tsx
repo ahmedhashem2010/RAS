@@ -28,14 +28,15 @@ export default async function ConvoysPage({
   const current = TABS.some((t) => t.key === tab) ? tab! : "all";
 
   const supabase = await createClient();
-  const { data: convoys } = await supabase
-    .from("convoys")
-    .select("*")
-    .order("start_date", { ascending: false });
-
-  const { data: participation } = await supabase
-    .from("convoy_attendance")
-    .select("convoy_id, volunteer_id, committee_id");
+  const [{ data: convoys }, { data: participation }] = await Promise.all([
+    supabase
+      .from("convoys")
+      .select("*")
+      .order("start_date", { ascending: false }),
+    supabase
+      .from("convoy_attendance")
+      .select("convoy_id, volunteer_id, committee_id"),
+  ]);
 
   const partMap = new Map<
     string,

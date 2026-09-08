@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { Profile, SessionUser, Team } from "@/lib/types";
 import type { ImpersonationPayload } from "@/lib/actions/impersonate";
 
@@ -9,7 +10,7 @@ export interface AuthedUser extends SessionUser {
   teams: Team[];
 }
 
-export async function getSessionUser(): Promise<AuthedUser | null> {
+export const getSessionUser = cache(async function getSessionUser(): Promise<AuthedUser | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,13 +18,19 @@ export async function getSessionUser(): Promise<AuthedUser | null> {
 
   if (!user) return null;
 
-  const [{ data: profile }, { data: teamRows }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("team_members")
-      .select("team_id, teams(*)")
-      .eq("volunteer_id", user.id),
-  ]);
+  const [{ data: profile }, { data: teamRows }, { data: ledRows }, { data: ledCommitteeRows }] =
+    await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("team_members")
+        .select("team_id, teams(*)")
+        .eq("volunteer_id", user.id),
+      supabase
+        .from("team_leaders")
+        .select("team_id")
+        .eq("leader_id", user.id),
+      supabase.rpc("led_committee_ids"),
+    ]);
 
   if (!profile) return null;
 
@@ -32,14 +39,8 @@ export async function getSessionUser(): Promise<AuthedUser | null> {
   // user is redirected to the suspension notice instead of reaching any data.
   if (profile.status === "banned") redirect("/account-banned");
 
-  const { data: ledRows } = await supabase
-    .from("team_leaders")
-    .select("team_id")
-    .eq("leader_id", user.id);
-
   const ledTeamIds = (ledRows ?? []).map((r) => r.team_id);
 
-  const { data: ledCommitteeRows } = await supabase.rpc("led_committee_ids");
   const ledCommitteeIds = ((ledCommitteeRows ?? []) as unknown[]).map((id) => String(id));
 
   // Check for leader impersonation cookie (super_admin only). Impersonation
@@ -79,7 +80,7 @@ export async function getSessionUser(): Promise<AuthedUser | null> {
     profile,
     teams: (teamRows ?? []).map((r) => r.teams as unknown as Team).filter(Boolean),
   };
-}
+});
 
 export async function requireUser(): Promise<AuthedUser> {
   const user = await getSessionUser();
