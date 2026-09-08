@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
 import type { ActionResult } from "./teams";
-import type { UserRole } from "@/lib/types";
+import type { UserRole, RosterVolunteer, VolunteerStatus } from "@/lib/types";
 
 function friendly(error: unknown, fallback: string): ActionResult {
   const msg = error instanceof Error ? error.message : "";
@@ -156,5 +156,194 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
   await logAudit("user_created", "profile", data.user.id, { email, role, by: me.id });
   revalidatePath("/admin/users");
   revalidatePath("/volunteers");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------
+// Volunteers Management System — committee roster
+// Permissions are re-checked server-side on every action and again in
+// the database (RLS + guard triggers). The UI only hides buttons.
+// ---------------------------------------------------------------
+
+const revalidateRoster = () => {
+  revalidatePath("/volunteers");
+  revalidatePath("/leaders");
+  revalidatePath("/committees");
+};
+
+async function getRosterVolunteer(id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("volunteer_details")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as RosterVolunteer | null) ?? null;
+}
+
+export async function createRosterVolunteer(input: {
+  full_name: string;
+  phone?: string | null;
+  notes?: string | null;
+  committee_ids: string[];
+}): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isAdmin) return { ok: false, error: "صلاحية الإدارة مطلوبة." };
+
+  const fullName = input.full_name.trim();
+  if (fullName.length < 3) return { ok: false, error: "الاسم الكامل مطلوب." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .insert({ full_name: fullName, phone: input.phone || null, notes: input.notes || null })
+    .select("id")
+    .single();
+  if (error) return friendly(error, "حدث خطأ أثناء إضافة المتطوع.");
+
+  const volunteerId = data.id;
+  if (input.committee_ids.length > 0) {
+    const { error: memberErr } = await supabase.from("committee_members").insert(
+      input.committee_ids.map((committee_id) => ({ committee_id, volunteer_id: volunteerId })),
+    );
+    if (memberErr) {
+      await supabase.from("volunteers").delete().eq("id", volunteerId);
+      return friendly(memberErr, "حدث خطأ أثناء تعيين اللجان.");
+    }
+  }
+
+  await logAudit("volunteer_created", "volunteer", volunteerId, {
+    name: fullName,
+    committees: input.committee_ids,
+    by: user.id,
+  });
+  revalidateRoster();
+  return { ok: true };
+}
+
+export async function updateRosterVolunteer(
+  id: string,
+  input: { full_name: string; phone?: string | null; notes?: string | null },
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "غير مصرح" };
+
+  const fullName = input.full_name.trim();
+  if (fullName.length < 3) return { ok: false, error: "الاسم الكامل مطلوب." };
+
+  const volunteer = await getRosterVolunteer(id);
+  if (!volunteer) return notFoundOrDenied();
+
+  // Committee leaders/deputies may edit members of committees they lead.
+  if (!user.isAdmin) {
+    const leads = volunteer.committees.some((c) => user.ledCommitteeIds.includes(c.id));
+    if (!leads) return { ok: false, error: "صلاحية تعديل بيانات هذا المتطوع مطلوبة." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .update({ full_name: fullName, phone: input.phone || null, notes: input.notes || null })
+    .eq("id", id)
+    .select("id");
+  if (error) return friendly(error, "حدث خطأ أثناء تعديل بيانات المتطوع.");
+  if (!data || data.length === 0) return notFoundOrDenied();
+
+  await logAudit("volunteer_updated", "volunteer", id, { ...input, by: user.id });
+  revalidateRoster();
+  revalidatePath(`/volunteers/v/${id}`);
+  return { ok: true };
+}
+
+export async function setRosterStatus(
+  id: string,
+  status: VolunteerStatus,
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isAdmin) return { ok: false, error: "صلاحية الإدارة مطلوبة." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .update({ status })
+    .eq("id", id)
+    .select("id");
+  if (error) return friendly(error, "حدث خطأ أثناء تحديث حالة المتطوع.");
+  if (!data || data.length === 0) return notFoundOrDenied();
+  await logAudit("volunteer_status_changed", "volunteer", id, { status, by: user.id });
+  revalidateRoster();
+  revalidatePath(`/volunteers/v/${id}`);
+  return { ok: true };
+}
+
+export async function deleteRosterVolunteer(id: string): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isSuperAdmin) return { ok: false, error: "صلاحية مدير النظام مطلوبة." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("volunteers").delete().eq("id", id).select("id");
+  if (error) return friendly(error, "حدث خطأ أثناء حذف المتطوع.");
+  if (!data || data.length === 0) return notFoundOrDenied();
+  await logAudit("volunteer_deleted", "volunteer", id, { by: user.id });
+  revalidateRoster();
+  return { ok: true };
+}
+
+export async function assignVolunteerCommittees(
+  id: string,
+  committeeIds: string[],
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isAdmin) return { ok: false, error: "صلاحية الإدارة مطلوبة." };
+  const volunteer = await getRosterVolunteer(id);
+  if (!volunteer) return notFoundOrDenied();
+
+  const current = new Set(volunteer.committees.map((c) => c.id));
+  const toAdd = committeeIds.filter((c) => !current.has(c));
+  const toRemove = [...current].filter((c) => !committeeIds.includes(c));
+
+  const supabase = await createClient();
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("committee_members")
+      .delete()
+      .eq("volunteer_id", id)
+      .in("committee_id", toRemove);
+    if (error) return friendly(error, "حدث خطأ أثناء تحديث اللجان.");
+  }
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from("committee_members").insert(
+      toAdd.map((committee_id) => ({ committee_id, volunteer_id: id })),
+    );
+    if (error) return friendly(error, "حدث خطأ أثناء تحديث اللجان.");
+  }
+
+  await logAudit("volunteer_updated", "volunteer", id, {
+    committees: committeeIds,
+    by: user.id,
+  });
+  revalidateRoster();
+  revalidatePath(`/volunteers/v/${id}`);
+  return { ok: true };
+}
+
+export async function linkVolunteerProfile(
+  id: string,
+  profileId: string | null,
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isSuperAdmin) return { ok: false, error: "صلاحية مدير النظام مطلوبة." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .update({ profile_id: profileId })
+    .eq("id", id)
+    .select("id");
+  if (error) return friendly(error, "حدث خطأ أثناء ربط الحساب.");
+  if (!data || data.length === 0) return notFoundOrDenied();
+  await logAudit("volunteer_profile_linked", "volunteer", id, {
+    profile_id: profileId,
+    by: user.id,
+  });
+  revalidateRoster();
+  revalidatePath(`/volunteers/v/${id}`);
   return { ok: true };
 }

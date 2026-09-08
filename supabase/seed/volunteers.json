@@ -1,0 +1,67 @@
+{
+  "committees": [
+    { "name": "الميديا", "name_en": "media", "sort_order": 1 },
+    { "name": "المعمل", "name_en": "laboratory", "sort_order": 2 },
+    { "name": "التوعية", "name_en": "awareness", "sort_order": 3 },
+    { "name": "التنظيم", "name_en": "organization", "sort_order": 4 },
+    { "name": "أسنان", "name_en": "dentistry", "sort_order": 5 },
+    { "name": "القافلة", "name_en": "campaign", "sort_order": 6 },
+    { "name": "الموارد البشرية", "name_en": "hr", "sort_order": 7 },
+    { "name": "الصيدلية", "name_en": "pharmacy", "sort_order": 8 },
+    { "name": "العيادات", "name_en": "clinics", "sort_order": 9 },
+    { "name": "الاستكشاف", "name_en": "exploration", "sort_order": 10 },
+    { "name": "الدكاترة", "name_en": "doctors", "sort_order": 11 }
+  ],
+  "volunteers": {
+    "media": [
+      "أسماء حسين", "عمر أنور", "شروق محمد", "أحمد (من السودان)", "يارا محمد",
+      "حبيبة صالح", "أحمد محمد منير", "خلود عادل", "أحمد هاشم", "نور أحمد",
+      "حمزة منعم", "ملك السيد", "مريم محمد فتحي"
+    ],
+    "laboratory": [
+      "يارا كمال", "يوسف هادي", "امنيه مرسي", "غنيه جمال", "ايه رفعت",
+      "صبري كامل", "ابوالنضر", "عمر السيد", "ضحي خميس", "عمر وليد"
+    ],
+    "awareness": [
+      "احمد محمود", "عبد الرحمن مصطفي", "اسلام عبد الصمد", "عادل لطفي",
+      "ملك وليد ابو عرب", "عبدالرحمن بحر", "ازهري عبد الرحيم", "ريم محمد",
+      "عبير", "مريم مصطفي", "مصطفي عبد المحسن", "عبدالرحمن علام"
+    ],
+    "organization": [
+      "ابراهيم محمد", "مريم حسام الدين", "ساره مصطفي", "سلمي هشام", "لمار مصطفي",
+      "منه الله", "منار متولي", "ادم النجار", "شهد ثروت", "سلمي"
+    ],
+    "dentistry": [
+      "امنة حاج محمد", "شذا عادل", "امير معاذ", "احمد عثمان", "يارا مصطفى",
+      "هبة عادل", "احمد سامح", "كنزي محمود", "امل الشيخ", "ايه اسكندر",
+      "هدير عبد الله", "رؤى فيصل", "لمى", "رنا عمرو", "احمد عبد العزيز",
+      "حسناء اشرف", "فاطمة محمود", "مريم الشباسي", "شروق صلاح", "زياد محي الدين",
+      "احمد ناصر", "اسيل محمد", "دعاء سعيد", "احمد بركات", "مصطفى مرجان",
+      "اسراء جمال", "سميرة عبد العزيز", "بسملة سعيد", "سارة مصطفى", "مريم عزيز",
+      "سما مصطفى", "سمر سامح", "محمود", "يم", "اسراء علاء",
+      "احمد عبد الباقي", "روان", "جمال ابراهيم", "امنية ابراهيم", "رغدة اسامة",
+      "لمار مصطفى"
+    ]
+  },
+  "leaders": [
+    { "committee": "campaign", "name": "د. سهيلة أحمد", "role": "leader", "username": "ras_campaign_leader" },
+    { "committee": "campaign", "name": "د. حاتم سامح", "role": "deputy", "username": null },
+    { "committee": "hr", "name": "د. جني طارق", "role": "leader", "username": "ras_hr_leader" },
+    { "committee": "hr", "name": "د. شادي شعبان", "role": "deputy", "username": "ras_hr_deputy" },
+    { "committee": "media", "name": "د. أحمد بدر", "role": "leader", "username": "ras_media_leader" },
+    { "committee": "media", "name": "أ. جني عيد", "role": "deputy", "username": "ras_media_deputy" },
+    { "committee": "pharmacy", "name": "د. أمينة منصور", "role": "leader", "username": "ras_pharmacy_leader" },
+    { "committee": "pharmacy", "name": "د. محمد السيد", "role": "deputy", "username": "ras_pharmacy_deputy" },
+    { "committee": "clinics", "name": "د. نسمة حامد", "role": "leader", "username": "ras_clinics_leader" },
+    { "committee": "exploration", "name": "م. محمد خالد", "role": "leader", "username": "ras_exploration_leader" },
+    { "committee": "doctors", "name": "د. ندي سامي", "role": "leader", "username": "ras_doctors_leader_1" },
+    { "committee": "doctors", "name": "د. حاتم سامح", "role": "leader", "username": "ras_doctors_leader_2" },
+    { "committee": "organization", "name": "أ. روان محمد", "role": "leader", "username": "ras_organization_leader" },
+    { "committee": "organization", "name": "أ. شهد ثروت", "role": "deputy", "username": "ras_organization_deputy" },
+    { "committee": "dentistry", "name": "د. أمير معاذ", "role": "leader", "username": "ras_dentistry_leader" },
+    { "committee": "dentistry", "name": "د. أحمد عثمان", "role": "deputy", "username": "ras_dentistry_deputy" },
+    { "committee": "awareness", "name": "د. محمد عشرة", "role": "leader", "username": "ras_awareness_leader" },
+    { "committee": "awareness", "name": "د. خميس علي", "role": "deputy", "username": "ras_awareness_deputy" },
+    { "committee": "laboratory", "name": "د. عمر السيد", "role": "leader", "username": "ras_laboratory_leader" }
+  ]
+}

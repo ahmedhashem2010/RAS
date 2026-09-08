@@ -19,6 +19,7 @@ export interface Profile {
   join_date: string | null;
   role: UserRole;
   status: AccountStatus;
+  must_change_password?: boolean;
   created_at: string;
 }
 
@@ -177,6 +178,65 @@ export interface SessionUser {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isTeamLeader: boolean;
+  isCommitteeLeader: boolean;
   role: UserRole;
   ledTeamIds: string[];
+  ledCommitteeIds: string[];
+}
+
+// --- Volunteers Management System ---
+
+export type VolunteerStatus = "active" | "inactive";
+
+export interface Department {
+  id: string;
+  name: string;
+  name_en: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VolunteerCommitteeRef {
+  id: string;
+  name: string;
+  name_en: string;
+}
+
+export interface VolunteerLeadershipRef {
+  committee_id: string;
+  is_deputy: boolean;
+}
+
+export interface RosterVolunteer {
+  id: string;
+  profile_id: string | null;
+  full_name: string;
+  search_name: string;
+  phone: string | null;
+  notes: string | null;
+  status: VolunteerStatus;
+  created_at: string;
+  updated_at: string;
+  committees: VolunteerCommitteeRef[];
+  leadership: VolunteerLeadershipRef[];
+}
+
+export interface CommitteeLeaderRow {
+  committee_id: string;
+  leader_id: string;
+  is_deputy: boolean;
+  created_at: string;
+}
+
+// Committee with its leadership (names resolved) and member count.
+export interface CommitteeWithLeaders extends Department {
+  leaders: Array<{
+    volunteerId: string;
+    fullName: string;
+    profileId: string | null;
+    isDeputy: boolean;
+  }>;
+  memberCount: number;
 }

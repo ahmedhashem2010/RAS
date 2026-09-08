@@ -49,13 +49,15 @@ export async function updateSession(request: NextRequest) {
   // Profile status is the single source of truth for bans. The lookup is done
   // only when a session exists, and only on the PK, so it stays cheap.
   let banned = false;
+  let mustChangePassword = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("status")
+      .select("status, must_change_password")
       .eq("id", user.id)
       .maybeSingle();
     banned = profile?.status === "banned";
+    mustChangePassword = profile?.must_change_password === true;
   }
 
   // A banned user is confined to the suspension notice — even on auth routes —
@@ -63,6 +65,23 @@ export async function updateSession(request: NextRequest) {
   if (user && banned && !isBannedPage && !isPublicAsset && url.pathname !== "/auth/confirm") {
     url.pathname = "/account-banned";
     url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Leaders bootstrapped with a temporary password must set a personal
+  // password before using the system.
+  const isChangePasswordPage =
+    url.pathname === "/update-password" || url.pathname === "/logout";
+  if (
+    user &&
+    !banned &&
+    mustChangePassword &&
+    !isChangePasswordPage &&
+    !isPublicAsset &&
+    url.pathname !== "/auth/confirm"
+  ) {
+    url.pathname = "/update-password";
+    url.search = "?required=1";
     return NextResponse.redirect(url);
   }
 

@@ -37,14 +37,19 @@ export async function getSessionUser(): Promise<AuthedUser | null> {
 
   const ledTeamIds = (ledRows ?? []).map((r) => r.team_id);
 
+  const { data: ledCommitteeRows } = await supabase.rpc("led_committee_ids");
+  const ledCommitteeIds = ((ledCommitteeRows ?? []) as unknown[]).map((id) => String(id));
+
   return {
     id: profile.id,
     email: user.email ?? profile.email ?? "",
     isAdmin: profile.role === "general_admin" || profile.role === "super_admin",
     isSuperAdmin: profile.role === "super_admin",
     isTeamLeader: ledTeamIds.length > 0,
+    isCommitteeLeader: ledCommitteeIds.length > 0,
     role: profile.role,
     ledTeamIds,
+    ledCommitteeIds,
     profile,
     teams: (teamRows ?? []).map((r) => r.teams as unknown as Team).filter(Boolean),
   };
@@ -65,5 +70,14 @@ export async function requireAdmin(): Promise<AuthedUser> {
 export async function requireSuperAdmin(): Promise<AuthedUser> {
   const user = await requireUser();
   if (!user.isSuperAdmin) redirect("/dashboard");
+  return user;
+}
+
+// Admins (super/general) and committee leaders/deputies can reach the
+// volunteers committee management screens. Leaders only ever see their own
+// committees' members through RLS.
+export async function requireCommitteeManager(): Promise<AuthedUser> {
+  const user = await requireUser();
+  if (!user.isAdmin && !user.isCommitteeLeader) redirect("/dashboard");
   return user;
 }

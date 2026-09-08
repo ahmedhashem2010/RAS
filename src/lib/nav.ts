@@ -12,6 +12,8 @@ import {
   ScrollText,
   Settings,
   Star,
+  Building2,
+  Crown,
   type LucideIcon,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
@@ -29,6 +31,7 @@ export interface NavItem {
 export function getNavItems(user: SessionUser): NavItem[] {
   const isAdmin = user.isAdmin;
   const isLeader = user.isTeamLeader;
+  const isCommitteeLeader = user.isCommitteeLeader;
   const isSuper = user.isSuperAdmin;
 
   const items: NavItem[] = [
@@ -45,9 +48,17 @@ export function getNavItems(user: SessionUser): NavItem[] {
     items.splice(3, 0, { href: "/tasks", label: nav.tasks, icon: ClipboardList });
   }
 
+  // Volunteers Management System: committees + roster + leaders.
+  const rosterItems: NavItem[] = [
+    { href: "/volunteers", label: nav.volunteers, icon: Users },
+    { href: "/committees", label: nav.committees, icon: Building2 },
+  ];
+  if (isAdmin || isCommitteeLeader) {
+    items.splice(4, 0, ...rosterItems);
+  }
   if (isAdmin) {
-    items.splice(4, 0,
-      { href: "/volunteers", label: nav.volunteers, icon: Users, admin: true },
+    items.splice(6, 0,
+      { href: "/leaders", label: nav.leaders, icon: Crown, admin: true },
       { href: "/warnings", label: nav.warnings, icon: ShieldAlert, admin: true },
       { href: "/analytics", label: nav.analytics, icon: BarChart3, admin: true },
     );

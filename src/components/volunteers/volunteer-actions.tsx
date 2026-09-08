@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ShieldAlert, UserX, UserCheck, Shield, Pencil } from "lucide-react";import { createClient } from "@/lib/supabase/client";
+import { ShieldAlert, UserX, UserCheck, Shield, Pencil } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import {
   setVolunteerStatus,
   setVolunteerRole,

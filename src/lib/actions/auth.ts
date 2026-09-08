@@ -66,8 +66,20 @@ export async function updatePasswordAction(formData: FormData): Promise<ActionRe
   if (password.length < 6) return { ok: false, error: "كلمة المرور يجب ألا تقل عن 6 أحرف." };
   if (password !== confirm) return { ok: false, error: "كلمتا المرور غير متطابقتين." };
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "انتهت الجلسة، يرجى الدخول مجدداً." };
+
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { ok: false, error: "حدث خطأ أثناء تحديث كلمة المرور." };
+
+  // Clear the first-login onboarding flag now that a personal password is set.
+  await supabase
+    .from("profiles")
+    .update({ must_change_password: false })
+    .eq("id", user.id);
+
   redirect("/dashboard");
 }
 

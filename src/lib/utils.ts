@@ -63,3 +63,17 @@ export function initials(name: string | null | undefined): string {
 export function normalizeDigits(input: string): string {
   return input.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 }
+
+// Mirror of public.volunteer_search_name() in the DB: strips tashkeel /
+// tatweel, maps hamza variants to ا, ة to ه, ى to ي, and lowercases.
+// Used for Arabic-friendly partial search that matches the index.
+export function normalizeArabicName(input: string): string {
+  return input
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .toLowerCase();
+}

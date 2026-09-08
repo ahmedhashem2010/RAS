@@ -26,6 +26,43 @@ export const nav = {
   settings: "إعدادات النظام",
   attendance: "الحضور",
   evaluate: "التقييم",
+  committees: "اللجان",
+  leaders: "القادة",
+};
+
+export const committeeRoleLabels: Record<string, string> = {
+  leader: "قائد",
+  deputy: "نائب القائد",
+};
+
+export const volunteerStatusLabels: Record<string, string> = {
+  active: "نشط",
+  inactive: "منسحب",
+};
+
+export const departmentRoleExplanation = {
+  leader: "قائد اللجنة",
+  deputy: "نائب قائد اللجنة",
+};
+
+export const volunteersCommon = {
+  addVolunteer: "إضافة متطوع",
+  editVolunteer: "تعديل بيانات المتطوع",
+  committees: "اللجان",
+  committee: "اللجنة",
+  leader: "القائد",
+  deputy: "نائب القائد",
+  linkAccount: "ربط الحساب",
+  unlinkAccount: "فك ربط الحساب",
+  noCommittees: "بدون لجنة",
+  activeVolunteers: "متطوع نشط",
+  inactiveVolunteers: "متطوع منسحب",
+  totalCommittees: "إجمالي اللجان",
+  leadersCount: "عدد القادة",
+  addCommittee: "إضافة لجنة",
+  noResults: "لا توجد نتائج مطابقة.",
+  assignCommittees: "تعيين اللجان",
+  manageLeadership: "إدارة القيادة",
 };
 
 export const convoyTypeLabels: Record<string, string> = {
