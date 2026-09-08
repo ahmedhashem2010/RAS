@@ -114,6 +114,19 @@ for (const file of files) {
     console.error("FAILED:\n", err.message);
     process.exit(1);
   }
+
+  const baseName = relative.split("/").pop();
+  const version = baseName.split("_")[0];
+  try {
+    await pg(
+      { url, serviceKey },
+      "insert into supabase_migrations.schema_migrations (version, name, statements) values ($1, $2, $3) on conflict (version) do nothing",
+      [version, baseName, []],
+    );
+    console.log(`Tracked: ${baseName}`);
+  } catch (trackErr) {
+    console.warn(`Warning: could not track migration ${baseName}: ${trackErr.message}`);
+  }
 }
 
 console.log("\nAll migrations applied.");
