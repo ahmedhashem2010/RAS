@@ -26,14 +26,14 @@ const OPTIONS: Array<{ key: AttendanceStatus; label: string; icon: typeof Check;
 
 export function AttendanceEditor({
   convoyId,
-  teamId,
-  teamName,
+  committeeId,
+  committeeName,
   members,
   initial,
 }: {
   convoyId: string;
-  teamId: string;
-  teamName: string;
+  committeeId: string;
+  committeeName: string;
   members: Member[];
   initial: Map<string, AttendanceStatus>;
 }) {
@@ -68,7 +68,7 @@ export function AttendanceEditor({
     setSaving(true);
     const res = await saveAttendance(
       convoyId,
-      teamId,
+      committeeId,
       members.map((m) => ({ volunteerId: m.id, status: status[m.id] ?? "absent" })),
     );
     setSaving(false);
@@ -87,7 +87,7 @@ export function AttendanceEditor({
           <div className="flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-brand-700" />
             <div>
-              <p className="text-sm font-bold text-slate-800">فريق {teamName}</p>
+              <p className="text-sm font-bold text-slate-800">لجنة {committeeName}</p>
               <p className="text-xs text-slate-500">{members.length} متطوع</p>
             </div>
           </div>

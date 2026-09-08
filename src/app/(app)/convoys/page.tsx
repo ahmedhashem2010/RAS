@@ -35,16 +35,17 @@ export default async function ConvoysPage({
 
   const { data: participation } = await supabase
     .from("convoy_attendance")
-    .select("convoy_id, volunteer_id, team_id");
+    .select("convoy_id, volunteer_id, committee_id");
 
   const partMap = new Map<
     string,
-    { volunteers: number; teams: Set<string> }
+    { volunteers: number; committees: Set<string> }
   >();
   for (const p of participation ?? []) {
-    const entry = partMap.get(p.convoy_id) ?? { volunteers: 0, teams: new Set<string>() };
+    if (!p.committee_id) continue;
+    const entry = partMap.get(p.convoy_id) ?? { volunteers: 0, committees: new Set<string>() };
     entry.volunteers += 1;
-    entry.teams.add(p.team_id);
+    entry.committees.add(p.committee_id);
     partMap.set(p.convoy_id, entry);
   }
 
@@ -135,7 +136,7 @@ export default async function ConvoysPage({
                       {part && (
                         <p className={`flex items-center gap-2 text-xs font-semibold ${statusColor[convoy.status]}`}>
                           <Users className="h-4 w-4" />
-                          مشاركة: {part.volunteers} متطوع في {part.teams.size} فرق
+                          مشاركة: {part.volunteers} متطوع في {part.committees.size} لجان
                         </p>
                       )}
                     </div>

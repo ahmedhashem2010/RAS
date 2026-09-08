@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/auth";
+import { requireCommitteeManager } from "@/lib/auth";
+import { getAllCommitteesWithLeaders } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { AttendanceEditor } from "@/components/convoys/attendance-editor";
@@ -8,17 +9,18 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { convoyTypeLabels } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
+import type { RosterVolunteer } from "@/lib/types";
 
 export default async function ConvoyAttendancePage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ team?: string }>;
+  searchParams: Promise<{ committee?: string }>;
 }) {
   const { id } = await params;
-  const { team: teamParam } = await searchParams;
-  const user = await requireUser();
+  const { committee: committeeParam } = await searchParams;
+  const user = await requireCommitteeManager();
   const supabase = await createClient();
 
   const { data: convoy } = await supabase
@@ -28,51 +30,52 @@ export default async function ConvoyAttendancePage({
     .single();
   if (!convoy) notFound();
 
-  const { data: teams } = await supabase.from("teams").select("*").order("name");
+  const [committees, convoyLeadersRes] = await Promise.all([
+    getAllCommitteesWithLeaders(),
+    supabase.from("convoy_leaders").select("leader_id").eq("convoy_id", id),
+  ]);
 
-  // Determine accessible teams: admin → all, leader → led teams
-  let accessibleTeamIds: string[];
-  if (user.isAdmin) {
-    accessibleTeamIds = (teams ?? []).map((t) => t.id);
-  } else {
-    accessibleTeamIds = user.ledTeamIds;
-  }
+  const markedLeaderIds = new Set((convoyLeadersRes.data ?? []).map((r) => r.leader_id));
 
-  const selectedTeamId = teamParam && accessibleTeamIds.includes(teamParam) ? teamParam : accessibleTeamIds[0];
-  if (!selectedTeamId) {
+  // Accessible committees: admin → all; leader → committees they lead.
+  const accessible = committees.filter((c) => user.isAdmin || user.ledCommitteeIds.includes(c.id));
+  const selectedCommitteeId =
+    committeeParam && accessible.some((c) => c.id === committeeParam) ? committeeParam : accessible[0]?.id;
+  if (!selectedCommitteeId) {
     return (
       <div className="mx-auto max-w-xl">
         <PageHeader title="تسجيل الحضور" description={convoy.name} />
         <Card>
           <CardContent className="py-8 text-center text-sm text-slate-500">
-            أنت لست قائداً لأي فريق لتسجيل الحضور.
+            أنت لست قائداً لأي لجنة لتسجيل الحضور.
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const selectedTeam = (teams ?? []).find((t) => t.id === selectedTeamId)!;
+  const selectedCommittee = accessible.find((c) => c.id === selectedCommitteeId)!;
+  const canWrite = user.isAdmin || markedLeaderIds.has(user.id);
 
-  const [membersRes, attendanceRes] = await Promise.all([
-    supabase
-      .from("team_members")
-      .select("volunteer_id, profiles(id, full_name, avatar_url, status)")
-      .eq("team_id", selectedTeamId)
-      .order("joined_at"),
-    supabase
-      .from("convoy_attendance")
-      .select("*")
-      .eq("convoy_id", id)
-      .eq("team_id", selectedTeamId),
-  ]);
+  // Committee members (roster volunteers linked to a login account).
+  const { data: rosterVolunteers } = await supabase.from("volunteer_details").select("*");
+  const memberRoster = ((rosterVolunteers ?? []) as RosterVolunteer[])
+    .filter((v) => v.committees.some((c) => c.id === selectedCommitteeId) && v.profile_id !== null);
 
-  const members = (membersRes.data ?? [])
-    .map((m) => m.profiles as unknown as { id: string; full_name: string; avatar_url: string | null; status: string })
-    .filter((m) => m.status === "active");
+  const profileIds = memberRoster.map((v) => v.profile_id!);
+  const { data: profilesData } = profileIds.length
+    ? await supabase.rpc("get_profiles", { p_ids: profileIds })
+    : { data: null };
+  const members = ((profilesData ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null; status: string }>)
+    .filter((p) => p.status === "active");
 
+  const { data: attendanceRows } = await supabase
+    .from("convoy_attendance")
+    .select("*")
+    .eq("convoy_id", id)
+    .eq("committee_id", selectedCommitteeId);
   const existing = new Map(
-    (attendanceRes.data ?? []).map((a) => [a.volunteer_id, a.status as "present" | "excused" | "absent"]),
+    (attendanceRows ?? []).map((a) => [a.volunteer_id, a.status as "present" | "excused" | "absent"]),
   );
 
   const isLocked = convoy.status === "completed" || convoy.status === "cancelled";
@@ -90,24 +93,22 @@ export default async function ConvoyAttendancePage({
         }
       />
 
-      {/* Team selector */}
-      {accessibleTeamIds.length > 1 && (
+      {/* Committee selector */}
+      {accessible.length > 1 && (
         <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
-          {(teams ?? [])
-            .filter((t) => accessibleTeamIds.includes(t.id))
-            .map((t) => (
-              <Link
-                key={t.id}
-                href={`/convoys/${id}/attendance?team=${t.id}`}
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  t.id === selectedTeamId
-                    ? "bg-brand-700 text-white"
-                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {t.name}
-              </Link>
-            ))}
+          {accessible.map((c) => (
+            <Link
+              key={c.id}
+              href={`/convoys/${id}/attendance?committee=${c.id}`}
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                c.id === selectedCommitteeId
+                  ? "bg-brand-700 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {c.name}
+            </Link>
+          ))}
         </div>
       )}
 
@@ -122,23 +123,23 @@ export default async function ConvoyAttendancePage({
             </p>
           </CardContent>
         </Card>
-      ) : selectedTeam.eval_mode === "media_work" ? (
+      ) : !canWrite ? (
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-sm font-bold text-slate-800">
-              فريق {selectedTeam.name} — الحضور غير مطلوب
+              لم يتم تحديدك كقائد حاضر لهذه القافلة
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-              فريق الوسائط يعمل عن بُعد، لذا لا يتم احتساب الحضور له. يمكنك تقييم
-              أعمال الأعضاء المنتجة من القافلة من صفحة التقييم.
+              مدير النظام يختار القادة الذين حضروا القافلة، وبعدها يمكنك تسجيل حضور
+              متطوعي لجنتك فقط.
             </p>
           </CardContent>
         </Card>
       ) : (
         <AttendanceEditor
           convoyId={id}
-          teamId={selectedTeamId}
-          teamName={selectedTeam.name}
+          committeeId={selectedCommitteeId}
+          committeeName={selectedCommittee.name}
           members={members}
           initial={existing}
         />

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VolunteerDetailActions } from "@/components/volunteers/volunteer-detail-actions";
+import { VolunteerAssessmentCard } from "@/components/volunteers/volunteer-assessment-card";
 import { committeeRoleLabels, volunteerStatusLabels } from "@/lib/i18n";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -122,6 +123,15 @@ export default async function RosterVolunteerPage({
             </Link>
           </CardContent>
         </Card>
+
+        <VolunteerAssessmentCard
+          volunteerId={volunteer.id}
+          fullName={volunteer.full_name}
+          rating={volunteer.rating}
+          description={volunteer.description}
+          notes={volunteer.notes}
+          canEdit={user.isAdmin}
+        />
       </div>
     </div>
   );

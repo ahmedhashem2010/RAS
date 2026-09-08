@@ -124,9 +124,56 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+/**
+ * Super admin chooses which committee leaders attended the convoy.
+ * Only marked leaders may later record attendance/ratings for their
+ * own committees (enforced again in the database).
+ */
+export async function setConvoyLeaders(
+  convoyId: string,
+  leaderIds: string[],
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isSuperAdmin) return { ok: false, error: "صلاحية مدير النظام مطلوبة." };
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("convoy_leaders")
+    .select("leader_id")
+    .eq("convoy_id", convoyId);
+  const current = new Set((existing ?? []).map((r) => r.leader_id));
+  const next = new Set(leaderIds);
+  const toAdd = [...next].filter((id) => !current.has(id));
+  const toRemove = [...current].filter((id) => !next.has(id));
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("convoy_leaders")
+      .delete()
+      .eq("convoy_id", convoyId)
+      .in("leader_id", toRemove);
+    if (error) return friendly(error, "حدث خطأ أثناء تحديث قادة القافلة.");
+  }
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from("convoy_leaders").insert(
+      toAdd.map((leader_id) => ({ convoy_id: convoyId, leader_id, marked_by: user.id })),
+    );
+    if (error) return friendly(error, "حدث خطأ أثناء تحديث قادة القافلة.");
+  }
+
+  await logAudit("convoy_leaders_updated", "convoy", convoyId, {
+    leaders: [...next],
+    by: user.id,
+  });
+  revalidatePath(`/convoys/${convoyId}`);
+  revalidatePath(`/convoys/${convoyId}/attendance`);
+  revalidatePath(`/convoys/${convoyId}/evaluate`);
+  return { ok: true };
+}
+
 export async function saveAttendance(
   convoyId: string,
-  teamId: string,
+  committeeId: string,
   records: AttendanceRecord[],
 ): Promise<ActionResult> {
   const user = await getSessionUser();
@@ -137,13 +184,13 @@ export async function saveAttendance(
     .from("convoy_attendance")
     .delete()
     .eq("convoy_id", convoyId)
-    .eq("team_id", teamId);
+    .eq("committee_id", committeeId);
 
   if (delErr) return friendly(delErr, "حدث خطأ أثناء تحديث الحضور.");
 
   const rows = records.map((r) => ({
     convoy_id: convoyId,
-    team_id: teamId,
+    committee_id: committeeId,
     volunteer_id: r.volunteerId,
     status: r.status,
     marked_by: user.id,
@@ -152,7 +199,11 @@ export async function saveAttendance(
   const { error } = await supabase.from("convoy_attendance").insert(rows);
   if (error) return friendly(error, "حدث خطأ أثناء حفظ الحضور.");
 
-  await logAudit("attendance_changed", "convoy", convoyId, { team_id: teamId, count: records.length, by: user.id });
+  await logAudit("attendance_changed", "convoy", convoyId, {
+    committee_id: committeeId,
+    count: records.length,
+    by: user.id,
+  });
   revalidatePath(`/convoys/${convoyId}`);
   revalidatePath(`/convoys/${convoyId}/attendance`);
   revalidatePath("/dashboard");
@@ -161,7 +212,7 @@ export async function saveAttendance(
 
 export async function saveEvaluation(
   convoyId: string,
-  teamId: string,
+  committeeId: string,
   volunteerId: string,
   rating: number,
   comment: string | null,
@@ -175,12 +226,12 @@ export async function saveEvaluation(
 
   const supabase = await createClient();
 
-  // Determine whether this is an insert (rating once per volunteer per team per convoy)
+  // Determine whether this is an insert (rating once per volunteer per committee per convoy)
   const { data: existing } = await supabase
     .from("convoy_evaluations")
     .select("id")
     .eq("convoy_id", convoyId)
-    .eq("team_id", teamId)
+    .eq("committee_id", committeeId)
     .eq("volunteer_id", volunteerId)
     .maybeSingle();
 
@@ -193,13 +244,13 @@ export async function saveEvaluation(
   } else {
     ({ error } = await supabase
       .from("convoy_evaluations")
-      .insert({ convoy_id: convoyId, team_id: teamId, volunteer_id: volunteerId, rating, comment, leader_id: user.id }));
+      .insert({ convoy_id: convoyId, committee_id: committeeId, volunteer_id: volunteerId, rating, comment, leader_id: user.id }));
   }
 
   if (error) return friendly(error, "حدث خطأ أثناء حفظ التقييم. حاول مرة أخرى.");
 
   await logAudit(existing ? "rating_updated" : "rating_created", "convoy", convoyId, {
-    team_id: teamId,
+    committee_id: committeeId,
     volunteer_id: volunteerId,
     rating,
     by: user.id,

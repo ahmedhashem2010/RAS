@@ -64,7 +64,8 @@ export interface ConvoyAttendance {
   id: string;
   convoy_id: string;
   volunteer_id: string;
-  team_id: string;
+  team_id: string | null;
+  committee_id: string | null;
   status: AttendanceStatus;
   marked_by: string;
   created_at: string;
@@ -74,10 +75,19 @@ export interface ConvoyEvaluation {
   id: string;
   convoy_id: string;
   volunteer_id: string;
-  team_id: string;
+  team_id: string | null;
+  committee_id: string | null;
   leader_id: string;
   rating: number;
   comment: string | null;
+  created_at: string;
+}
+
+// A committee leader the super admin marked as attending a convoy.
+export interface ConvoyLeaderRow {
+  convoy_id: string;
+  leader_id: string;
+  marked_by: string;
   created_at: string;
 }
 
@@ -182,6 +192,12 @@ export interface SessionUser {
   role: UserRole;
   ledTeamIds: string[];
   ledCommitteeIds: string[];
+  impersonating?: {
+    leaderId: string;
+    leaderName: string;
+    committeeId: string;
+    committeeName: string;
+  };
 }
 
 // --- Volunteers Management System ---
@@ -216,6 +232,8 @@ export interface RosterVolunteer {
   search_name: string;
   phone: string | null;
   notes: string | null;
+  rating: number | null;
+  description: string | null;
   status: VolunteerStatus;
   created_at: string;
   updated_at: string;

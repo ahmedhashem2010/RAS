@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/auth";
+import { requireCommitteeManager } from "@/lib/auth";
+import { getAllCommitteesWithLeaders } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { EvaluationEditor } from "@/components/convoys/evaluation-editor";
@@ -9,17 +10,18 @@ import { ArrowRight, Star } from "lucide-react";
 import Link from "next/link";
 import { convoyTypeLabels } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
+import type { RosterVolunteer } from "@/lib/types";
 
 export default async function ConvoyEvaluatePage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ team?: string }>;
+  searchParams: Promise<{ committee?: string }>;
 }) {
   const { id } = await params;
-  const { team: teamParam } = await searchParams;
-  const user = await requireUser();
+  const { committee: committeeParam } = await searchParams;
+  const user = await requireCommitteeManager();
   const supabase = await createClient();
 
   const { data: convoy } = await supabase
@@ -29,60 +31,60 @@ export default async function ConvoyEvaluatePage({
     .single();
   if (!convoy) notFound();
 
-  const { data: teams } = await supabase.from("teams").select("*").order("name");
+  const [committees, convoyLeadersRes] = await Promise.all([
+    getAllCommitteesWithLeaders(),
+    supabase.from("convoy_leaders").select("leader_id").eq("convoy_id", id),
+  ]);
 
-  const accessibleTeamIds = user.isAdmin
-    ? (teams ?? []).map((t) => t.id)
-    : user.ledTeamIds;
+  const markedLeaderIds = new Set((convoyLeadersRes.data ?? []).map((r) => r.leader_id));
 
-  const selectedTeamId = teamParam && accessibleTeamIds.includes(teamParam) ? teamParam : accessibleTeamIds[0];
-  if (!selectedTeamId) {
+  const accessible = committees.filter((c) => user.isAdmin || user.ledCommitteeIds.includes(c.id));
+  const selectedCommitteeId =
+    committeeParam && accessible.some((c) => c.id === committeeParam) ? committeeParam : accessible[0]?.id;
+  if (!selectedCommitteeId) {
     return (
       <div className="mx-auto max-w-xl">
         <PageHeader title="تقييم الأداء" description={convoy.name} />
         <Card>
           <CardContent className="py-8 text-center text-sm text-slate-500">
-            أنت لست قائداً لأي فريق لتقييم الأداء.
+            أنت لست قائداً لأي لجنة لتقييم الأداء.
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const selectedTeam = (teams ?? []).find((t) => t.id === selectedTeamId)!;
+  const canWrite = user.isAdmin || markedLeaderIds.has(user.id);
 
-  const [membersRes, attendanceRes, evalsRes] = await Promise.all([
-    supabase
-      .from("team_members")
-      .select("volunteer_id, profiles(id, full_name, avatar_url, status)")
-      .eq("team_id", selectedTeamId)
-      .order("joined_at"),
+  const { data: rosterVolunteers } = await supabase.from("volunteer_details").select("*");
+  const memberRoster = ((rosterVolunteers ?? []) as RosterVolunteer[])
+    .filter((v) => v.committees.some((c) => c.id === selectedCommitteeId) && v.profile_id !== null);
+
+  const profileIds = memberRoster.map((v) => v.profile_id!);
+  const { data: profilesData } = profileIds.length
+    ? await supabase.rpc("get_profiles", { p_ids: profileIds })
+    : { data: null };
+  const members = ((profilesData ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null; status: string }>)
+    .filter((p) => p.status === "active");
+
+  const [attendanceRes, evalsRes] = await Promise.all([
     supabase
       .from("convoy_attendance")
       .select("*")
       .eq("convoy_id", id)
-      .eq("team_id", selectedTeamId),
+      .eq("committee_id", selectedCommitteeId),
     supabase
       .from("convoy_evaluations")
       .select("*")
       .eq("convoy_id", id)
-      .eq("team_id", selectedTeamId),
+      .eq("committee_id", selectedCommitteeId),
   ]);
 
-  const members = (membersRes.data ?? [])
-    .map((m) => m.profiles as unknown as { id: string; full_name: string; avatar_url: string | null; status: string })
-    .filter((m) => m.status === "active");
-
+  // Only members marked present may be evaluated.
   const presentIds = new Set(
-    (attendanceRes.data ?? [])
-      .filter((a) => a.status === "present")
-      .map((a) => a.volunteer_id),
+    (attendanceRes.data ?? []).filter((a) => a.status === "present").map((a) => a.volunteer_id),
   );
-
-  // Media teams evaluate everyone; attendance teams only present volunteers.
-  const eligible = selectedTeam.eval_mode === "media_work"
-    ? members
-    : members.filter((m) => presentIds.has(m.id));
+  const eligible = members.filter((m) => presentIds.has(m.id));
 
   const existing = new Map(
     (evalsRes.data ?? []).map((e) => [
@@ -106,23 +108,21 @@ export default async function ConvoyEvaluatePage({
         }
       />
 
-      {accessibleTeamIds.length > 1 && (
+      {accessible.length > 1 && (
         <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
-          {(teams ?? [])
-            .filter((t) => accessibleTeamIds.includes(t.id))
-            .map((t) => (
-              <Link
-                key={t.id}
-                href={`/convoys/${id}/evaluate?team=${t.id}`}
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  t.id === selectedTeamId
-                    ? "bg-brand-700 text-white"
-                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {t.name}
-              </Link>
-            ))}
+          {accessible.map((c) => (
+            <Link
+              key={c.id}
+              href={`/convoys/${id}/evaluate?committee=${c.id}`}
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                c.id === selectedCommitteeId
+                  ? "bg-brand-700 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {c.name}
+            </Link>
+          ))}
         </div>
       )}
 
@@ -137,23 +137,29 @@ export default async function ConvoyEvaluatePage({
             </p>
           </CardContent>
         </Card>
+      ) : !canWrite ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-sm font-bold text-slate-800">
+              لم يتم تحديدك كقائد حاضر لهذه القافلة
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+              بعد أن يحدد مدير النظام القادة الحاضرين، يمكنك تقييم متطوعي لجنتك فقط.
+            </p>
+          </CardContent>
+        </Card>
       ) : eligible.length === 0 ? (
         <EmptyState
           icon={Star}
           title="لا يوجد متطوعون مؤهلون للتقييم"
-          description={
-            selectedTeam.eval_mode === "media_work"
-              ? "لا يوجد أعضاء في هذا الفريق حالياً."
-              : "سجّل حضور المتطوعين أولاً — فقط من حُدّدوا كحاضرين يمكن تقييمهم."
-          }
+          description="سجّل حضور المتطوعين أولاً — فقط من حُدّدوا كحاضرين يمكن تقييمهم."
         />
       ) : (
         <EvaluationEditor
           convoyId={id}
-          teamId={selectedTeamId}
+          committeeId={selectedCommitteeId}
           members={eligible}
           existing={existing}
-          mediaMode={selectedTeam.eval_mode === "media_work"}
         />
       )}
     </div>

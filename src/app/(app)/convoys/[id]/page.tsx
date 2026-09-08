@@ -7,9 +7,11 @@ import {
   ClipboardList,
   Trophy,
   ArrowRight,
+  Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
+import { getAllCommitteesWithLeaders } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,6 +19,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StarRating } from "@/components/ui/star-rating";
 import { PageHeader } from "@/components/ui/page-header";
 import { ConvoyStatusActions } from "@/components/convoys/convoy-status-actions";
+import { DeleteConvoyButton } from "@/components/convoys/delete-convoy-button";
+import { ConvoyLeadersPicker } from "@/components/convoys/convoy-leaders-picker";
 import { formatDate } from "@/lib/utils";
 import { convoyTypeLabels } from "@/lib/i18n";
 import type { ConvoyStatus } from "@/lib/types";
@@ -37,10 +41,11 @@ export default async function ConvoyDetailPage({
     .single();
   if (!convoy) notFound();
 
-  const [attendanceRes, evalsRes, teamsRes, awardsRes] = await Promise.all([
+  const [attendanceRes, evalsRes, committees, convoyLeadersRes, awardsRes] = await Promise.all([
     supabase.from("convoy_attendance").select("*").eq("convoy_id", id),
     supabase.from("convoy_evaluations").select("*").eq("convoy_id", id),
-    supabase.from("teams").select("*"),
+    getAllCommitteesWithLeaders(),
+    supabase.from("convoy_leaders").select("*").eq("convoy_id", id),
     supabase
       .from("awards")
       .select("*, profiles!awards_recipient_id_fkey(id, full_name)")
@@ -51,7 +56,8 @@ export default async function ConvoyDetailPage({
   const attendance = attendanceRes.data ?? [];
   const evaluations = evalsRes.data ?? [];
   const awards = awardsRes.data ?? [];
-  const teams = teamsRes.data ?? [];
+  const convoyLeaders = convoyLeadersRes.data ?? [];
+  const committeeName = new Map(committees.map((c) => [c.id, c.name]));
 
   const profileIds = [
     ...new Set([
@@ -59,6 +65,7 @@ export default async function ConvoyDetailPage({
       ...attendance.map((a) => a.marked_by),
       ...evaluations.map((e) => e.volunteer_id),
       ...evaluations.map((e) => e.leader_id),
+      ...convoyLeaders.map((l) => l.leader_id),
       ...awards.map((a) => a.recipient_id),
     ]),
   ].filter(Boolean);
@@ -70,14 +77,14 @@ export default async function ConvoyDetailPage({
 
   const nameOf = (pid: string) =>
     (profiles.find((p) => p.id === pid) as { full_name?: string } | undefined)?.full_name ?? "متطوع";
-  const teamName = (tid: string) => teams.find((t) => t.id === tid)?.name ?? "فريق";
 
-  // Per-team attendance summary
-  const teamSummary = new Map<string, { present: number; excused: number; absent: number }>();
+  // Per-committee attendance summary
+  const committeeSummary = new Map<string, { present: number; excused: number; absent: number }>();
   for (const a of attendance) {
-    const entry = teamSummary.get(a.team_id) ?? { present: 0, excused: 0, absent: 0 };
+    if (!a.committee_id) continue;
+    const entry = committeeSummary.get(a.committee_id) ?? { present: 0, excused: 0, absent: 0 };
     entry[a.status as "present" | "excused" | "absent"] += 1;
-    teamSummary.set(a.team_id, entry);
+    committeeSummary.set(a.committee_id, entry);
   }
   const points = attendance.reduce(
     (s, a) => s + (a.status === "present" ? 1 : a.status === "excused" ? 0.5 : 0),
@@ -88,8 +95,19 @@ export default async function ConvoyDetailPage({
     ...e,
     volunteerName: nameOf(e.volunteer_id),
     leaderName: nameOf(e.leader_id),
-    team: teamName(e.team_id),
+    committee: e.committee_id ? committeeName.get(e.committee_id) ?? "لجنة" : "—",
   }));
+
+  // Leaders marked as attending (for the super-admin picker).
+  const markedLeaderIds = new Set(convoyLeaders.map((l) => l.leader_id));
+  const allLeaders = committees.flatMap((c) =>
+    c.leaders.map((l) => ({
+      profileId: l.profileId,
+      fullName: l.fullName,
+      committeeName: c.name,
+      isDeputy: l.isDeputy,
+    })),
+  );
 
   const isLocked = convoy.status === "completed" || convoy.status === "cancelled";
 
@@ -116,7 +134,12 @@ export default async function ConvoyDetailPage({
             </span>
           )}
         </div>
-        {user.isAdmin && <ConvoyStatusActions convoyId={convoy.id} status={convoy.status as ConvoyStatus} />}
+        {user.isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            <ConvoyStatusActions convoyId={convoy.id} status={convoy.status as ConvoyStatus} />
+            <DeleteConvoyButton convoyId={convoy.id} convoyName={convoy.name} />
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -157,8 +180,42 @@ export default async function ConvoyDetailPage({
             </CardContent>
           </Card>
 
+          {/* Which leaders attended (super admin control) */}
+          {user.isSuperAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-brand-700" />
+                  القادة الحاضرون
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isLocked ? (
+                  <div className="space-y-2">
+                    {convoyLeaders.length === 0 ? (
+                      <p className="text-sm text-slate-400">لم يتم تحديد قادة حاضرين.</p>
+                    ) : (
+                      convoyLeaders.map((l) => (
+                        <div key={l.leader_id} className="flex items-center gap-2 text-sm text-slate-700">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          {nameOf(l.leader_id)}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  <ConvoyLeadersPicker
+                    convoyId={convoy.id}
+                    leaders={allLeaders}
+                    initial={[...markedLeaderIds]}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Actions for leaders */}
-          {(user.isAdmin || user.ledTeamIds.length > 0) && (
+          {(user.isAdmin || user.isCommitteeLeader) && (
             <Card>
               <CardHeader>
                 <CardTitle>إدارة القافلة</CardTitle>
@@ -180,7 +237,7 @@ export default async function ConvoyDetailPage({
                   </div>
                 )}
                 <p className="text-xs text-slate-400">
-                  كل قائد فريق يسجل حضور وتقييم متطوعي فريقه فقط.
+                  كل قائد لجنة يسجل حضور متطوعي لجنته فقط بعد تحديده كقائد حاضر من مدير النظام.
                 </p>
               </CardContent>
             </Card>
@@ -188,7 +245,7 @@ export default async function ConvoyDetailPage({
         </div>
 
         <div className="space-y-6 lg:col-span-2">
-          {/* Attendance summary per team */}
+          {/* Attendance summary per committee */}
           <Card>
             <CardHeader>
               <CardTitle>ملخص الحضور</CardTitle>
@@ -198,14 +255,14 @@ export default async function ConvoyDetailPage({
               {attendance.length === 0 ? (
                 <EmptyState
                   title="لم يتم تسجيل الحضور بعد"
-                  description="سيقوم قادة الفرق بتسجيل الحضور خلال القافلة."
+                  description="سيقوم القادة الحاضرون بتسجيل حضور لجانهم خلال القافلة."
                 />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 text-right text-xs text-slate-400">
-                        <th className="pb-2 font-medium">الفريق</th>
+                        <th className="pb-2 font-medium">اللجنة</th>
                         <th className="pb-2 font-medium">
                           <span className="text-emerald-600">حاضر</span>
                         </th>
@@ -219,9 +276,9 @@ export default async function ConvoyDetailPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {[...teamSummary.entries()].map(([tid, s]) => (
-                        <tr key={tid} className="border-b border-slate-50">
-                          <td className="py-2.5 font-bold text-slate-800">{teamName(tid)}</td>
+                      {[...committeeSummary.entries()].map(([cid, s]) => (
+                        <tr key={cid} className="border-b border-slate-50">
+                          <td className="py-2.5 font-bold text-slate-800">{committeeName.get(cid) ?? "لجنة"}</td>
                           <td className="py-2.5 font-semibold text-emerald-600">{s.present}</td>
                           <td className="py-2.5 font-semibold text-amber-600">{s.excused}</td>
                           <td className="py-2.5 font-semibold text-red-600">{s.absent}</td>
@@ -245,7 +302,7 @@ export default async function ConvoyDetailPage({
               {evalRows.length === 0 ? (
                 <EmptyState
                   title="لا توجد تقييمات بعد"
-                  description="تقييمات الأداء تظهر بعد قيام قادة الفرق بالتقييم."
+                  description="تقييمات الأداء تظهر بعد قيام القادة الحاضرين بالتقييم."
                 />
               ) : (
                 <div className="space-y-3">
@@ -256,7 +313,7 @@ export default async function ConvoyDetailPage({
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-800">{e.volunteerName}</p>
                           <p className="text-xs text-slate-400">
-                            {e.team} · بقلم {e.leaderName}
+                            {e.committee} · بقلم {e.leaderName}
                           </p>
                         </div>
                         <StarRating value={e.rating} readOnly size="sm" />

@@ -275,6 +275,44 @@ export async function setRosterStatus(
   return { ok: true };
 }
 
+/**
+ * Standing assessment (rating 1-5 + description + notes) on a roster
+ * volunteer's record. Admins only — independent of any convoy and
+ * editable anytime. Leaders may NOT touch these fields (guard
+ * trigger + server check + RLS all enforce it).
+ */
+export async function updateVolunteerAssessment(
+  id: string,
+  input: { rating: number | null; description?: string | null; notes?: string | null },
+): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user?.isAdmin) return { ok: false, error: "صلاحية الإدارة مطلوبة." };
+  if (input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) {
+    return { ok: false, error: "التقييم يجب أن يكون من 1 إلى 5 أو بدون تقييم." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .update({
+      rating: input.rating,
+      description: input.description?.trim() || null,
+      notes: input.notes?.trim() || null,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return friendly(error, "حدث خطأ أثناء حفظ التقييم العام.");
+  if (!data || data.length === 0) return notFoundOrDenied();
+  await logAudit("volunteer_rating_updated", "volunteer", id, {
+    rating: input.rating,
+    has_description: Boolean(input.description?.trim()),
+    by: user.id,
+  });
+  revalidateRoster();
+  revalidatePath(`/volunteers/v/${id}`);
+  return { ok: true };
+}
+
 export async function deleteRosterVolunteer(id: string): Promise<ActionResult> {
   const user = await getSessionUser();
   if (!user?.isSuperAdmin) return { ok: false, error: "صلاحية مدير النظام مطلوبة." };

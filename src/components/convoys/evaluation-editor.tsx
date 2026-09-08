@@ -26,16 +26,14 @@ interface ExistingMap {
 
 export function EvaluationEditor({
   convoyId,
-  teamId,
+  committeeId,
   members,
   existing,
-  mediaMode,
 }: {
   convoyId: string;
-  teamId: string;
+  committeeId: string;
   members: Member[];
   existing: Map<string, ExistingMap>;
-  mediaMode: boolean;
 }) {
   const { toast } = useToast();
   const router = useRouter();
@@ -58,7 +56,7 @@ export function EvaluationEditor({
       return;
     }
     setSaving(id);
-    const res = await saveEvaluation(convoyId, teamId, id, d.rating, d.comment?.trim() || null);
+    const res = await saveEvaluation(convoyId, committeeId, id, d.rating, d.comment?.trim() || null);
     setSaving(null);
     if (!res.ok) {
       toast("error", "حدث خطأ أثناء حفظ التقييم", res.error);
@@ -71,9 +69,8 @@ export function EvaluationEditor({
   return (
     <div className="space-y-4">
       <p className="rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-sm text-slate-600">
-        {mediaMode
-          ? "هذا الفريق يتبع نموذج تقييم الأعمال — قيّم الأعضاء حسب الأعمال المنتجة من القافلة."
-          : "قيّم أداء المتطوعين الحاضرين في القافلة من 1 إلى 5 مع تعليق مختصر."}
+        قيّم أداء المتطوعين الحاضرين في القافلة من 1 إلى 5 مع تعليق مختصر. أي متطوع لم يُحدد
+        كحاضر لا يمكن تقييمه.
       </p>
 
       {members.map((m) => {
@@ -106,7 +103,7 @@ export function EvaluationEditor({
 
               <Textarea
                 rows={2}
-                placeholder="تعليق مختصر عن الأداء (مثال: التزام ممتاز وروح فريق عالية)"
+                placeholder="تعليق مختصر عن الأداء (مثال: التزام ممتاز وروح جماعية عالية)"
                 value={d?.comment ?? ""}
                 onChange={(e) => setComment(m.id, e.target.value)}
               />
