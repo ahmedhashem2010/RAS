@@ -2,35 +2,53 @@ import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import type { Profile, SessionUser, Team } from "@/lib/types";
+import type { Profile, SessionUser } from "@/lib/types";
 import type { ImpersonationPayload } from "@/lib/actions/impersonate";
 
 export interface AuthedUser extends SessionUser {
   profile: Profile;
-  teams: Team[];
 }
 
 export const getSessionUser = cache(async function getSessionUser(): Promise<AuthedUser | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
+  // Middleware validates/refreshes the token once per request, so reading the
+  // stored session locally (no Auth round-trip) is safe here. Only fall back
+  // to getUser() when the access token is missing or near expiry.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) return null;
+
+  const stale =
+    !session.expires_at ||
+    session.expires_at - 30 < Math.floor(Date.now() / 1000);
+  let user: import("@supabase/supabase-js").User | null = session.user ?? null;
+  if (stale) {
+    const { data: fresh } = await supabase.auth.getUser();
+    user = fresh.user;
+  }
   if (!user) return null;
 
-  const [{ data: profile }, { data: teamRows }, { data: ledRows }, { data: ledCommitteeRows }] =
-    await Promise.all([
+  let profile: Profile | null = null;
+  let ledCommitteeIds: string[] = [];
+
+  // Prefer the single get_my_context() round-trip; fall back to the two
+  // individual queries until migration 0019 is applied.
+  const ctxRes = await supabase.rpc("get_my_context").maybeSingle();
+  if (!ctxRes.error && ctxRes.data) {
+    const ctx = ctxRes.data as { profile: Profile; led_committee_ids: unknown[] };
+    profile = ctx.profile;
+    ledCommitteeIds = ctx.led_committee_ids.map((id) => String(id));
+  } else {
+    const [profileRes, ledgerRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("team_members")
-        .select("team_id, teams(*)")
-        .eq("volunteer_id", user.id),
-      supabase
-        .from("team_leaders")
-        .select("team_id")
-        .eq("leader_id", user.id),
       supabase.rpc("led_committee_ids"),
     ]);
+    profile = (profileRes.data as Profile | null) ?? null;
+    ledCommitteeIds = ((ledgerRes.data ?? []) as unknown[]).map((id) => String(id));
+  }
 
   if (!profile) return null;
 
@@ -39,9 +57,10 @@ export const getSessionUser = cache(async function getSessionUser(): Promise<Aut
   // user is redirected to the suspension notice instead of reaching any data.
   if (profile.status === "banned") redirect("/account-banned");
 
-  const ledTeamIds = (ledRows ?? []).map((r) => r.team_id);
-
-  const ledCommitteeIds = ((ledCommitteeRows ?? []) as unknown[]).map((id) => String(id));
+  // Leaders bootstrapped with a temporary password must set a personal one
+  // before using the system. The (app) layout redirects any other page here;
+  // /update-password and /logout live outside that layout.
+  if (profile.must_change_password) redirect("/update-password?required=1");
 
   // Check for leader impersonation cookie (super_admin only). Impersonation
   // targets the LIVE committee leadership structure (committee_leaders).
@@ -69,16 +88,13 @@ export const getSessionUser = cache(async function getSessionUser(): Promise<Aut
     email: user.email ?? profile.email ?? "",
     isAdmin: profile.role === "general_admin" || profile.role === "super_admin",
     isSuperAdmin: profile.role === "super_admin",
-    isTeamLeader: ledTeamIds.length > 0,
     isCommitteeLeader: ledCommitteeIds.length > 0 || !!impersonating,
     role: profile.role,
-    ledTeamIds,
     ledCommitteeIds: impersonating
       ? [...new Set([...ledCommitteeIds, impersonating.committeeId])]
       : ledCommitteeIds,
     impersonating,
     profile,
-    teams: (teamRows ?? []).map((r) => r.teams as unknown as Team).filter(Boolean),
   };
 });
 
