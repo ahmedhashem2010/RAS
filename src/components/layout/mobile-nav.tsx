@@ -22,6 +22,7 @@ export function MobileNav({ user }: { user: SessionUser }) {
             <Link
               key={item.href}
               href={item.href}
+              prefetch
               className={cn(
                 "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-slate-500 transition-colors",
                 active && "text-brand-700",
