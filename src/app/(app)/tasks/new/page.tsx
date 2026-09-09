@@ -1,36 +1,20 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { CreateTaskForm } from "@/components/tasks/create-task-form";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function NewTaskPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ team?: string }>;
-}) {
+export default async function NewTaskPage() {
   const user = await requireUser();
-  const { team } = await searchParams;
+  if (!user.isAdmin && !user.isCommitteeLeader) redirect("/tasks");
   const supabase = await createClient();
 
-  let teamIds: string[];
-  if (user.isAdmin) {
-    const { data } = await supabase.from("teams").select("id");
-    teamIds = (data ?? []).map((t) => t.id);
-  } else {
-    teamIds = user.ledTeamIds;
-  }
-
-  const { data: teams } = await supabase.from("teams").select("*").in("id", teamIds);
+  // Scoped by RLS: admins get every active profile, committee leaders get
+  // the active volunteers of the committees they lead (plus themselves).
   const { data: volunteers } = await supabase.rpc("get_active_profiles");
-
-  const preselect = team && teamIds.includes(team) ? team : undefined;
 
   return (
     <div className="mx-auto max-w-2xl">
-      <CreateTaskForm
-        teams={teams ?? []}
-        volunteers={volunteers ?? []}
-        preselectTeamId={preselect}
-      />
+      <CreateTaskForm volunteers={volunteers ?? []} />
     </div>
   );
 }

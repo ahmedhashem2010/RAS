@@ -7,16 +7,14 @@ import {
   MapPin,
   CalendarDays,
   Gauge,
-  Activity,
   Plus,
 } from "lucide-react";
-import { getAdminOverview, getTeamActivity, getRecentActivity } from "@/lib/analytics";
+import { getAdminOverview, getRecentActivity } from "@/lib/analytics";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { Progress } from "@/components/ui/progress";
-import { formatDate, formatPercent, timeAgo } from "@/lib/utils";
+import { formatDate, timeAgo } from "@/lib/utils";
 import { convoyTypeLabels } from "@/lib/i18n";
 
 const activityTone = {
@@ -29,9 +27,8 @@ const activityTone = {
 } as const;
 
 export async function AdminDashboard() {
-  const [overview, teamActivity, recentActivity] = await Promise.all([
+  const [overview, recentActivity] = await Promise.all([
     getAdminOverview(),
-    getTeamActivity(),
     getRecentActivity(),
   ]);
 
@@ -85,57 +82,14 @@ export async function AdminDashboard() {
       {/* Overview cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard icon={Users} label="إجمالي المتطوعين" value={overview.totalVolunteers} tone="teal" hint={`${overview.activeVolunteers} نشط`} />
-        <StatCard icon={Truck} label="مجموعات العمل" value={overview.totalTeams} tone="blue" />
+        <StatCard icon={Truck} label="قوافل قادمة" value={overview.upcomingCount} tone="blue" hint={overview.upcoming?.name} />
         <StatCard icon={Gauge} label="متوسط نقاط المتطوعين" value={overview.avgScore} tone="slate" hint="من 100" />
         <StatCard icon={Trophy} label="الجوائز" value={overview.totalAwards} tone="gold" />
         <StatCard icon={ShieldAlert} label="إنذارات نشطة" value={overview.activeWarnings} tone="red" hint={`من ${overview.warningLimit - 1} إلى ${overview.warningLimit} إنذارات`} />
-        <StatCard icon={CalendarDays} label="قوافل قادمة" value={overview.upcomingCount} tone="blue" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Team activity */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-brand-600" />
-              نشاط المجموعات
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {teamActivity.map((team, i) => (
-              <Link
-                key={team.team_id}
-                href={`/teams/${team.team_id}`}
-                className="block rounded-lg p-2 transition-colors hover:bg-slate-50"
-              >
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="w-6 text-center text-sm font-extrabold text-slate-400">{i + 1}</span>
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: team.color }}
-                  />
-                  <span className="flex-1 truncate text-sm font-bold text-slate-800">
-                    {team.name}
-                  </span>
-                  <span className="text-sm font-extrabold text-brand-700">
-                    {team.activity_score}%
-                  </span>
-                </div>
-                <div className="pr-8">
-                  <Progress value={team.activity_score} />
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 pr-1 text-[11px] text-slate-400">
-                    <span>{team.member_count} متطوع</span>
-                    <span>حضور {formatPercent(team.attendance_rate)}</span>
-                    <span>مهام {formatPercent(team.task_completion)}</span>
-                    <span>{team.convoy_count} قافلة</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           {/* Upcoming convoy */}
           <Card>
             <CardHeader>

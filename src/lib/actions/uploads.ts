@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 
 export async function uploadTaskProof(formData: FormData): Promise<ActionResult> {
   const file = formData.get("file") as File | null;

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 import type { UserRole, RosterVolunteer, VolunteerStatus } from "@/lib/types";
 
 function friendly(error: unknown, fallback: string): ActionResult {
@@ -88,11 +88,15 @@ export async function updateVolunteerProfile(
 
   const supabase = await createClient();
   if (!user.isAdmin) {
-    const { data: memberships } = await supabase
-      .from("team_members")
-      .select("team_id")
-      .eq("volunteer_id", id);
-    const isLeader = (memberships ?? []).some((m) => user.ledTeamIds.includes(m.team_id));
+    // A committee leader may edit a profile that is a roster member of a
+    // committee they lead.
+    const { data: linked } = await supabase
+      .from("volunteer_details")
+      .select("profile_id, committees")
+      .eq("profile_id", id);
+    const isLeader = (linked ?? []).some((v) =>
+      (v.committees as Array<{ id: string }>).some((c) => user.ledCommitteeIds.includes(c.id)),
+    );
     if (!isLeader) return { ok: false, error: "صلاحية تعديل بيانات هذا المتطوع مطلوبة." };
   }
 

@@ -4,21 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 
 function friendly(error: unknown, fallback: string): ActionResult {
   const msg = error instanceof Error ? error.message : "";
   if (msg.includes("row-level security") || msg.includes("permission denied")) {
     return { ok: false, error: "ليس لديك صلاحية للقيام بهذا الإجراء." };
   }
-  if (msg.includes("not a member of the task team")) {
-return { ok: false, error: "يمكن تعيين عضو من المجموعة فقط." };
+  if (msg.includes("not in a committee you lead")) {
+    return { ok: false, error: "يمكن تعيين عضو من اللجان المشرف عليها فقط." };
   }
   if (msg.includes("non-active volunteer") || msg.includes("does not exist")) {
     return { ok: false, error: "لا يمكن تعيين حساب موقوف أو غير نشط." };
   }
-  if (msg.includes("Only a leader of the task team")) {
-    return { ok: false, error: "صلاحية إنشاء مهمة لهذه المجموعة مطلوبة." };
+  if (msg.includes("Only a committee leader")) {
+    return { ok: false, error: "صلاحية إنشاء المهام مطلوبة." };
   }
   console.error("[tasks]", error);
   return { ok: false, error: fallback };
@@ -27,7 +27,6 @@ return { ok: false, error: "يمكن تعيين عضو من المجموعة ف�
 export interface CreateTaskInput {
   title: string;
   description?: string;
-  teamId: string;
   deadline?: string;
   assignTo?: "all" | string;
 }
@@ -42,8 +41,8 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
   if (input.deadline && isNaN(new Date(input.deadline).getTime())) {
     return { ok: false, error: "الموعد النهائي غير صحيح." };
   }
-  if (!user.isAdmin && !(input.teamId && user.ledTeamIds.includes(input.teamId))) {
-    return { ok: false, error: "صلاحية إنشاء مهمة لهذه المجموعة مطلوبة." };
+  if (!user.isAdmin && !user.isCommitteeLeader) {
+    return { ok: false, error: "صلاحية إنشاء المهام مطلوبة." };
   }
 
   const { data: task, error: taskErr } = await supabase
@@ -51,7 +50,6 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
     .insert({
       title,
       description: input.description?.trim() || null,
-      team_id: input.teamId,
       deadline: input.deadline || null,
       created_by: user.id,
     })
@@ -73,32 +71,26 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
     if (target.status !== "active") {
       return { ok: false, error: "لا يمكن تعيين حساب موقوف أو غير نشط." };
     }
-    // Leaders may only assign members of their own team.
+    // Committee leaders may only assign volunteers in a committee they lead.
     if (!user.isAdmin) {
-      const { data: member } = await supabase
-        .from("team_members")
-        .select("volunteer_id")
-        .eq("team_id", input.teamId)
-        .eq("volunteer_id", input.assignTo)
-        .maybeSingle();
-      if (!member) return { ok: false, error: "يمكن تعيين عضو من المجموعة فقط." };
+      const { data: memberships } = await supabase
+        .from("volunteer_details")
+        .select("profile_id, committees")
+        .eq("profile_id", input.assignTo);
+      const isInLedCommittee = (memberships ?? []).some((v) =>
+        (v.committees as Array<{ id: string }>).some((c) => user.ledCommitteeIds.includes(c.id)),
+      );
+      if (!isInLedCommittee) return { ok: false, error: "يمكن تعيين عضو من اللجان المشرف عليها فقط." };
     }
     volunteerIds = [input.assignTo];
   } else {
-    const { data: members } = await supabase
-      .from("team_members")
-      .select("volunteer_id")
-      .eq("team_id", input.teamId);
-    const memberIds = (members ?? []).map((m) => m.volunteer_id);
-    if (memberIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, status")
-        .in("id", memberIds);
-      volunteerIds = (profiles ?? [])
-        .filter((p) => p.status === "active")
-        .map((p) => p.id);
-    }
+    const res = await supabase.rpc("get_active_profiles");
+    const members = (res.data ?? []) as Array<{ id: string; status: string }>;
+    // For a committee leader "all" means all the active profiles they can see
+    // (their committees' members + themselves); admins get every active profile.
+    volunteerIds = (members ?? [])
+      .filter((p) => p.status === "active")
+      .map((p) => p.id);
   }
 
   if (volunteerIds.length > 0) {
@@ -114,7 +106,6 @@ export async function createTask(input: CreateTaskInput): Promise<ActionResult> 
 
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
-  revalidatePath(`/teams/${input.teamId}`);
   return { ok: true, id: task.id } as ActionResult & { id: string };
 }
 
@@ -125,7 +116,7 @@ export async function updateTask(
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "غير مصرح" };
   const supabase = await createClient();
-  if (!(await canManageTask(supabase, user, id))) {
+  if (!(await isTaskOwner(supabase, user, id))) {
     return { ok: false, error: "صلاحية تعديل هذه المهمة مطلوبة." };
   }
   const { error } = await supabase
@@ -147,7 +138,7 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "غير مصرح" };
   const supabase = await createClient();
-  if (!(await canManageTask(supabase, user, id))) {
+  if (!(await isTaskOwner(supabase, user, id))) {
     return { ok: false, error: "صلاحية حذف هذه المهمة مطلوبة." };
   }
   const { error } = await supabase.from("tasks").delete().eq("id", id);
@@ -158,18 +149,18 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-async function canManageTask(
+async function isTaskOwner(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  user: { isAdmin: boolean; ledTeamIds: string[] },
+  user: { isAdmin: boolean; id: string },
   taskId: string,
 ): Promise<boolean> {
   if (user.isAdmin) return true;
   const { data } = await supabase
     .from("tasks")
-    .select("team_id")
+    .select("created_by")
     .eq("id", taskId)
     .maybeSingle();
-  return Boolean(data?.team_id && user.ledTeamIds.includes(data.team_id));
+  return data?.created_by === user.id;
 }
 
 export async function startTask(assignmentId: string): Promise<ActionResult> {
@@ -243,8 +234,8 @@ export async function reviewTask(
     .maybeSingle();
   if (!assignment) return { ok: false, error: "المهمة غير موجودة." };
 
-  const { data: task } = await supabase.from("tasks").select("team_id").eq("id", assignment.task_id).maybeSingle();
-  const canReview = user.isAdmin || (task?.team_id && user.ledTeamIds.includes(task.team_id));
+  const { data: task } = await supabase.from("tasks").select("created_by").eq("id", assignment.task_id).maybeSingle();
+  const canReview = user.isAdmin || task?.created_by === user.id;
   if (!canReview) return { ok: false, error: "صلاحية مراجعة هذه المهمة مطلوبة." };
   if (assignment.status !== "submitted") {
     return { ok: false, error: "لا يمكن مراجعة مهمة غير مسلّمة." };
@@ -278,8 +269,8 @@ export async function reopenTask(assignmentId: string): Promise<ActionResult> {
     .eq("id", assignmentId)
     .maybeSingle();
   if (!assignment) return { ok: false, error: "المهمة غير موجودة." };
-  const { data: task } = await supabase.from("tasks").select("team_id").eq("id", assignment.task_id).maybeSingle();
-  const canReopen = user.isAdmin || (task?.team_id && user.ledTeamIds.includes(task.team_id));
+  const { data: task } = await supabase.from("tasks").select("created_by").eq("id", assignment.task_id).maybeSingle();
+  const canReopen = user.isAdmin || task?.created_by === user.id;
   if (!canReopen) return { ok: false, error: "صلاحية إعادة فتح هذه المهمة مطلوبة." };
   if (assignment.status !== "rejected") {
     return { ok: false, error: "لا يمكن إعادة فتح مهمة غير مرفوضة." };

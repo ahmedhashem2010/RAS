@@ -16,38 +16,27 @@ import { formatDate } from "@/lib/utils";
 import { taskStatusLabels } from "@/lib/i18n";
 import type { TaskStatus } from "@/lib/types";
 
-export default async function TasksPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ team?: string }>;
-}) {
+export default async function TasksPage() {
   const user = await requireUser();
-  const { team: teamFilter } = await searchParams;
   const supabase = await createClient();
 
-  const { data: teams } = await supabase.from("teams").select("*").order("name");
-  const canCreate = user.isAdmin || user.isTeamLeader;
-
+  const canManage = user.isAdmin || user.isCommitteeLeader;
   let tasks;
   let isVolunteerView = false;
 
-  if (user.isAdmin) {
-    let q = supabase.from("tasks").select("*").order("created_at", { ascending: false });
-    if (teamFilter && teamFilter !== "all") q = q.eq("team_id", teamFilter);
-    const { data } = await q;
-    tasks = data ?? [];
-  } else if (user.isTeamLeader) {
+  if (canManage) {
+    // RLS scopes this: admins see every task, committee leaders see the
+    // tasks they created (plus any they were personally assigned).
     const { data } = await supabase
       .from("tasks")
       .select("*")
-      .in("team_id", user.ledTeamIds)
       .order("created_at", { ascending: false });
     tasks = data ?? [];
   } else {
     isVolunteerView = true;
     const { data } = await supabase
       .from("task_assignments")
-      .select("task_id, status, submitted_at, tasks!inner(*, teams(name))")
+      .select("task_id, status, submitted_at, tasks!inner(*)")
       .eq("volunteer_id", user.id)
       .order("created_at", { ascending: false });
     tasks = (data ?? []).map((a) => ({
@@ -81,9 +70,6 @@ export default async function TasksPage({
     }
   }
 
-  const teamName = (tid: string | null) =>
-    (teams ?? []).find((t) => t.id === tid)?.name ?? "";
-
   return (
     <div>
       <PageHeader
@@ -91,10 +77,10 @@ export default async function TasksPage({
         description={
           isVolunteerView
             ? "تتبع وتسليم مهامك"
-            : "إدارة المهام العادية للمجموعات — القوافل تُدار من صفحة القوافل"
+            : "إدارة المهام العامة — أنشئها للمتطوعين النشطين وراجع تسليماتهم"
         }
         action={
-          canCreate ? (
+          canManage ? (
             <Link href="/tasks/new">
               <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
                 <Plus className="h-4 w-4" />
@@ -105,45 +91,17 @@ export default async function TasksPage({
         }
       />
 
-      {user.isAdmin && (
-        <div className="no-scrollbar mb-5 flex gap-2 overflow-x-auto pb-1">
-          <Link
-            href="/tasks?team=all"
-            className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              !teamFilter || teamFilter === "all"
-                ? "bg-brand-700 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            كل المجموعات
-          </Link>
-          {(teams ?? []).map((t) => (
-            <Link
-              key={t.id}
-              href={`/tasks?team=${t.id}`}
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                teamFilter === t.id
-                  ? "bg-brand-700 text-white"
-                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {t.name}
-            </Link>
-          ))}
-        </div>
-      )}
-
       {tasks.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title={isVolunteerView ? "لا توجد مهام مكلفة لك" : "لا توجد مهام بعد"}
           description={
             isVolunteerView
-              ? "عندما يكلفك قائد مجموعتك بمهمة ستظهر هنا."
-              : "أنشئ مهمة جديدة لمجموعتك — تُعرض لكل أعضاء المجموعة."
+              ? "عندما تكلفك الإدارة بمهمة ستظهر هنا."
+              : "أنشئ مهمة جديدة وعلّقها على المتطوعين النشطين."
           }
           action={
-            canCreate ? (
+            canManage ? (
               <Link href="/tasks/new">
                 <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
                   إنشاء مهمة
@@ -173,16 +131,16 @@ export default async function TasksPage({
                       </p>
                     )}
                     <div className="flex flex-wrap gap-1.5">
-                      {teamName(task.team_id) && (
-                        <Badge tone="teal">{teamName(task.team_id)}</Badge>
-                      )}
                       {isVolunteerView ? (
                         <StatusBadge status={task._myStatus} />
-                      ) : summary && (
-                        <Badge tone={summary.submitted > 0 ? "amber" : "slate"}>
-                          <Users className="h-3 w-3" />
-                          {summary.approved}/{summary.total} مكتملة
-                        </Badge>
+                      ) : (
+                        summary &&
+                        summary.total > 0 && (
+                          <Badge tone="teal">
+                            <Users className="h-3 w-3" />
+                            {summary.approved}/{summary.total} مكتملة
+                          </Badge>
+                        )
                       )}
                     </div>
                     {isVolunteerView ? (

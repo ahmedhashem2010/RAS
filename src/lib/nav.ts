@@ -30,7 +30,6 @@ export interface NavItem {
 
 export function getNavItems(user: SessionUser): NavItem[] {
   const isAdmin = user.isAdmin;
-  const isLeader = user.isTeamLeader;
   const isCommitteeLeader = user.isCommitteeLeader;
   const isSuper = user.isSuperAdmin;
 
@@ -43,9 +42,8 @@ export function getNavItems(user: SessionUser): NavItem[] {
     { href: "/profile", label: nav.profile, icon: User },
   ];
 
-  if (isAdmin || isLeader) {
-    items.splice(2, 0, { href: "/teams", label: nav.teams, icon: Users });
-    items.splice(3, 0, { href: "/tasks", label: nav.tasks, icon: ClipboardList });
+  if (isAdmin || isCommitteeLeader) {
+    items.splice(2, 0, { href: "/tasks", label: nav.tasks, icon: ClipboardList });
   }
 
   // Volunteers Management System: committees + roster + leaders.

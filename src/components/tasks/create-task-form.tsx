@@ -9,21 +9,15 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast";
-import type { Team } from "@/lib/types";
 
 export function CreateTaskForm({
-  teams,
   volunteers,
-  preselectTeamId,
 }: {
-  teams: Team[];
   volunteers: { id: string; full_name: string; status: string }[];
-  preselectTeamId?: string;
 }) {
   const { toast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
-  const [teamId, setTeamId] = React.useState(preselectTeamId ?? teams[0]?.id ?? "");
   const [assignTo, setAssignTo] = React.useState<"all" | string>("all");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -34,7 +28,6 @@ export function CreateTaskForm({
     const res = await createTask({
       title: String(data.get("title") ?? ""),
       description: String(data.get("description") ?? "") || undefined,
-      teamId,
       deadline: String(data.get("deadline") ?? "") || undefined,
       assignTo,
     });
@@ -52,7 +45,7 @@ export function CreateTaskForm({
     <>
       <PageHeader
         title="مهمة جديدة"
-        description="المهام العادية تُدار من قادة المجموعات — القوافل لها صفحة منفصلة"
+        description="المهام العامة تُدار من الإدارة وقادة اللجان"
         action={
           <button
             onClick={() => router.back()}
@@ -79,20 +72,6 @@ export function CreateTaskForm({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="المجموعة" required>
-                <Select
-                  value={teamId}
-                  onChange={(e) => setTeamId(e.target.value)}
-                  required
-                  disabled={teams.length === 0}
-                >
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
               <Field label="الموعد النهائي">
                 <Input type="date" name="deadline" />
               </Field>
@@ -100,7 +79,7 @@ export function CreateTaskForm({
 
             <Field label="التعيين">
               <Select value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
-                <option value="all">كل مجموعة {teams.find((t) => t.id === teamId)?.name ?? ""}</option>
+                <option value="all">الكل (المتطوعون الظاهرون)</option>
                 {volunteers.map((v) => (
                   <option key={v.id} value={v.id}>
                     متطوع: {v.full_name}
@@ -111,7 +90,7 @@ export function CreateTaskForm({
 
             {assignTo === "all" && (
               <p className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                المهمة ستُعرض لكل أعضاء المجموعة المختارة، وسيرسل كل متطوع إنجازاً منفصلاً.
+                ستُعرض المهمة لكل المتطوعين النشطين الذين يمكنك تعيينهم، وسيرسل كل متطوع إنجازاً منفصلاً.
               </p>
             )}
 

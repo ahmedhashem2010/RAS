@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Team, VolunteerScore, Department, RosterVolunteer, CommitteeWithLeaders } from "@/lib/types";
+import { cache } from "react";
+import type { VolunteerScore, Department, RosterVolunteer, CommitteeWithLeaders } from "@/lib/types";
 
 export interface LeaderboardEntry {
-  team_id: string;
   volunteer_id: string;
   full_name: string;
   avatar_url: string | null;
@@ -19,37 +19,20 @@ export interface LeaderboardEntry {
   joined_at: string | null;
 }
 
-export async function getTeamLeaderboard(teamId: string): Promise<LeaderboardEntry[]> {
+// Global ranking of every active profile, visible to all logged-in users.
+export const getGlobalLeaderboard = cache(async function getGlobalLeaderboard(): Promise<LeaderboardEntry[]> {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("get_team_leaderboard", { p_team_id: teamId });
+  const { data } = await supabase.rpc("get_global_leaderboard");
   return (data ?? []) as LeaderboardEntry[];
-}
+});
 
-export async function getMyTeamIds(userId: string): Promise<string[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("team_members")
-    .select("team_id")
-    .eq("volunteer_id", userId);
-  return (data ?? []).map((r) => r.team_id);
-}
-
-export async function getMyTeams(userId: string): Promise<(Team & { joined_at: string })[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("team_members")
-    .select("team_id, joined_at, teams(*)")
-    .eq("volunteer_id", userId);
-  return (data ?? []).map((r) => ({ ...(r.teams as unknown as Team), joined_at: r.joined_at }));
-}
-
-export async function getScore(volunteerId: string): Promise<VolunteerScore | null> {
+export const getScore = cache(async function getScore(volunteerId: string): Promise<VolunteerScore | null> {
   const supabase = await createClient();
   const { data } = await supabase.rpc("get_score", { p_volunteer_id: volunteerId }).maybeSingle();
   return (data as VolunteerScore) ?? null;
-}
+});
 
-/** Rank of a volunteer within a team's leaderboard (1-based, active members). */
+/** Rank of a volunteer within the global leaderboard (1-based, active members). */
 export function rankInBoard(
   board: LeaderboardEntry[],
   volunteerId: string,
@@ -67,35 +50,35 @@ export function rankInBoard(
 // so a committee leader only ever sees their own committees' members.
 // ---------------------------------------------------------------
 
-export async function getDepartments(): Promise<Department[]> {
+export const getDepartments = cache(async function getDepartments(): Promise<Department[]> {
   const supabase = await createClient();
   const { data } = await supabase.from("departments").select("*").order("sort_order");
   return (data ?? []) as Department[];
-}
+});
 
-export async function getVolunteerDetails(): Promise<RosterVolunteer[]> {
+export const getVolunteerDetails = cache(async function getVolunteerDetails(): Promise<RosterVolunteer[]> {
   const supabase = await createClient();
   const { data } = await supabase.from("volunteer_details").select("*").order("full_name");
   return (data ?? []) as RosterVolunteer[];
-}
+});
 
-export async function getVolunteerById(id: string): Promise<RosterVolunteer | null> {
+export const getVolunteerById = cache(async function getVolunteerById(id: string): Promise<RosterVolunteer | null> {
   const supabase = await createClient();
   const { data } = await supabase.from("volunteer_details").select("*").eq("id", id).maybeSingle();
   return (data as RosterVolunteer | null) ?? null;
-}
+});
 
 function memberMap(volunteers: RosterVolunteer[]) {
   return new Map(volunteers.map((v) => [v.id, v]));
 }
 
-export async function getDepartmentBySlug(slug: string): Promise<Department | null> {
+export const getDepartmentBySlug = cache(async function getDepartmentBySlug(slug: string): Promise<Department | null> {
   const supabase = await createClient();
   const { data } = await supabase.from("departments").select("*").eq("name_en", slug).maybeSingle();
   return (data as Department | null) ?? null;
-}
+});
 
-export async function getCommitteeWithLeaders(
+export const getCommitteeWithLeaders = cache(async function getCommitteeWithLeaders(
   dept: Department,
 ): Promise<CommitteeWithLeaders> {
   const supabase = await createClient();
@@ -129,9 +112,9 @@ export async function getCommitteeWithLeaders(
     leaders,
     memberCount: members.length,
   };
-}
+});
 
-export async function getAllCommitteesWithLeaders(): Promise<CommitteeWithLeaders[]> {
+export const getAllCommitteesWithLeaders = cache(async function getAllCommitteesWithLeaders(): Promise<CommitteeWithLeaders[]> {
   const [departments, leaders, volunteers] = await Promise.all([
     getDepartments(),
     (async () => {
@@ -163,4 +146,4 @@ export async function getAllCommitteesWithLeaders(): Promise<CommitteeWithLeader
       memberCount: members.length,
     };
   });
-}
+});

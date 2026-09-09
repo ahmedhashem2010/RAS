@@ -3,7 +3,7 @@ import { Trophy, ShieldAlert, CalendarClock, Activity, UserRound, ClipboardCheck
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getSettings } from "@/lib/actions/settings";
-import { getScore, getMyTeams, getTeamLeaderboard, rankInBoard } from "@/lib/queries";
+import { getScore, getGlobalLeaderboard, rankInBoard } from "@/lib/queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -16,21 +16,17 @@ export default async function ProfilePage() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [score, teams, { data: warnings }] = await Promise.all([
+  const [score, board, { data: warnings }, settings] = await Promise.all([
     getScore(user.id),
-    getMyTeams(user.id),
+    getGlobalLeaderboard(),
     supabase.from("warnings").select("id, number, reason, created_at").eq("volunteer_id", user.id).order("number", { ascending: false }),
+    getSettings(),
   ]);
 
-  const boards = await Promise.all(teams.map((t) => getTeamLeaderboard(t.id)));
-  const ranks = teams.map((t, i) => ({ team: t, rank: rankInBoard(boards[i], user.id) }));
-  const bestRank = ranks.reduce<{ rank: number; teamName: string } | null>(
-    (best, r) => (r.rank !== null && (!best || r.rank < best.rank) ? { rank: r.rank, teamName: r.team.name } : best),
-    null,
-  );
+  const globalRank = rankInBoard(board, user.id);
+  const totalActive = board.filter((b) => b.status === "active").length;
 
   const warningsList = warnings ?? [];
-  const settings = await getSettings();
   const p = user.profile;
 
   return (
@@ -67,47 +63,33 @@ export default async function ProfilePage() {
         <StatCard icon={Trophy} label="النقاط الإجمالية" value={score?.overall_score ?? 0} tone="gold" />
         <StatCard
           icon={Activity}
-          label="أفضل ترتيب"
-          value={bestRank ? `#${bestRank.rank}` : "—"}
-          hint={bestRank?.teamName}
+          label="ترتيبي العام"
+          value={globalRank ? `#${globalRank}` : "—"}
+          hint={globalRank ? `من ${totalActive} متطوع` : undefined}
           tone="teal"
         />
         <StatCard icon={Percent} label="نسبة الحضور" value={score ? `${score.attendance_percent}%` : "—"} tone="blue" />
         <StatCard icon={ShieldAlert} label="الإنذارات" value={warningsList.length} hint={`${warningsList.length}/${settings.warning_limit}`} tone={warningsList.length >= settings.warning_limit ? "red" : "slate"} />
       </div>
 
-      {/* Teams + rank */}
+      {/* Global rank */}
       <Card className="mb-6">
         <CardContent>
-          <div className="mb-3 flex items-center gap-2">
-            <UserRound className="h-4 w-4 text-brand-700" />
-            <h3 className="text-sm font-bold text-slate-800">المجموعات المنتمي لها وترتيبي</h3>
-          </div>
-          {teams.length === 0 ? (
-            <p className="text-sm text-slate-400">أنت لست عضواً في أي مجموعة بعد.</p>
-          ) : (
-            <div className="space-y-3">
-              {teams.map((t) => {
-                const r = ranks.find((x) => x.team.id === t.id);
-                return (
-                  <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: t.color }} />
-                      <Link href={`/teams/${t.id}`} className="text-sm font-bold text-slate-800 hover:text-brand-700">
-                        {t.name}
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-slate-500">انضم {formatDate(t.joined_at)}</span>
-                      <Badge tone={r?.rank && r.rank <= 3 ? "gold" : "slate"}>
-                        {r?.rank ? `الترتيب #${r.rank}` : "لا يوجد ترتيب"}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserRound className="h-4 w-4 text-brand-700" />
+              <h3 className="text-sm font-bold text-slate-800">ترتيبي العام</h3>
             </div>
-          )}
+            <Badge tone={globalRank != null && globalRank <= 3 ? "gold" : "teal"}>
+              {globalRank ? `#${globalRank}` : "بدون ترتيب"}
+            </Badge>
+          </div>
+          <p className="mt-3 text-sm text-slate-500">
+            الترتيب يعتمد على نقاطك الإجمالية مقارنة بكل المتطوعين النشطين.
+          </p>
+          <Link href="/leaderboard" className="mt-2 inline-block text-xs font-semibold text-brand-700 hover:text-brand-800">
+            عرض لوحة الترتيب الكاملة
+          </Link>
         </CardContent>
       </Card>
 

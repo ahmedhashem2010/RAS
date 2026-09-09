@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {
   const supabase = await createClient();

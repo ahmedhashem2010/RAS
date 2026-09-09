@@ -7,7 +7,6 @@ export const appSubtitleAr = "نظام إدارة رسالة";
 
 export const nav = {
   dashboard: "الرئيسية",
-  teams: "مجموعات العمل",
   volunteers: "المتطوعون",
   convoys: "القوافل",
   tasks: "المهام",
@@ -17,7 +16,6 @@ export const nav = {
   notifications: "الإشعارات",
   leaderboard: "لوحة الترتيب",
   performance: "الأداء",
-  myTeam: "مجموعتي",
   profile: "الملف الشخصي",
   myTasks: "مهامي",
   home: "الرئيسية",
@@ -103,11 +101,6 @@ export const roleLabels: Record<string, string> = {
   super_admin: "مدير النظام",
 };
 
-export const evalModeLabels: Record<string, string> = {
-  attendance: "حضور ومشاركة",
-  media_work: "الأعمال الجماعية (وسائط)",
-};
-
 export const accountStatusLabels: Record<string, string> = {
   active: "نشط",
   banned: "محظور",
@@ -159,8 +152,6 @@ export const errors = {
   ratingRange: "يجب أن يكون التقييم من 1 إلى 5.",
   warningReason: "سبب الإنذار مطلوب ولا يمكن أن يكون فارغاً.",
   deadlineInvalid: "يرجى إدخال موعد نهائي صحيح.",
-  duplicateMembership: "هذا المتطوع عضو بالفعل في هذه المجموعة.",
-  leaderTwoTeams: "لا يمكن تعيين الشخص قائداً لمجموعتين مختلفتين.",
   convoyLocked: "لا يمكن التعديل بعد اكتمال القافلة.",
   authFailed: "بيانات الدخول غير صحيحة.",
 };

@@ -7,7 +7,6 @@ export type ConvoyStatus = "upcoming" | "active" | "completed" | "cancelled";
 export type AttendanceStatus = "present" | "excused" | "absent";
 export type TaskStatus = "pending" | "in_progress" | "submitted" | "approved" | "rejected";
 export type AwardType = "volunteer_of_day" | "best_leader";
-export type TeamEvalMode = "attendance" | "media_work";
 
 export interface Profile {
   id: string;
@@ -21,29 +20,6 @@ export interface Profile {
   status: AccountStatus;
   must_change_password?: boolean;
   created_at: string;
-}
-
-export interface Team {
-  id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  eval_mode: TeamEvalMode;
-  created_at: string;
-}
-
-export interface TeamMemberRow {
-  team_id: string;
-  volunteer_id: string;
-  joined_at: string;
-  teams?: Team;
-}
-
-export interface TeamLeaderRow {
-  team_id: string;
-  leader_id: string;
-  created_at: string;
-  teams?: Team;
 }
 
 export interface Convoy {
@@ -64,7 +40,6 @@ export interface ConvoyAttendance {
   id: string;
   convoy_id: string;
   volunteer_id: string;
-  team_id: string | null;
   committee_id: string | null;
   status: AttendanceStatus;
   marked_by: string;
@@ -75,7 +50,6 @@ export interface ConvoyEvaluation {
   id: string;
   convoy_id: string;
   volunteer_id: string;
-  team_id: string | null;
   committee_id: string | null;
   leader_id: string;
   rating: number;
@@ -95,7 +69,6 @@ export interface Task {
   id: string;
   title: string;
   description: string | null;
-  team_id: string | null;
   deadline: string | null;
   created_by: string;
   created_at: string;
@@ -187,10 +160,8 @@ export interface SessionUser {
   email: string;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  isTeamLeader: boolean;
   isCommitteeLeader: boolean;
   role: UserRole;
-  ledTeamIds: string[];
   ledCommitteeIds: string[];
   impersonating?: {
     leaderId: string;

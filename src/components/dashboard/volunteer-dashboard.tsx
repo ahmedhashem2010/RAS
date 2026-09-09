@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSettings } from "@/lib/actions/settings";
-import { getScore, getMyTeams, getTeamLeaderboard, rankInBoard } from "@/lib/queries";
+import { getScore, getGlobalLeaderboard, rankInBoard } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScoreRing, Progress } from "@/components/ui/progress";
@@ -21,19 +21,17 @@ import type { AuthedUser } from "@/lib/auth";
 
 export async function VolunteerDashboard({ user }: { user: AuthedUser }) {
   const supabase = await createClient();
-  const settings = await getSettings();
-  const [score, teams] = await Promise.all([
+  const [settings, score, board] = await Promise.all([
+    getSettings(),
     getScore(user.id),
-    getMyTeams(user.id),
+    getGlobalLeaderboard(),
   ]);
 
-  // Leaderboard per team
-  const boards = await Promise.all(
-    teams.map(async (t) => {
-      const board = await getTeamLeaderboard(t.id);
-      return { team: t, board, rank: rankInBoard(board, user.id) };
-    }),
-  );
+  const globalRank = rankInBoard(board, user.id);
+  const topVolunteers = [...board]
+    .filter((e) => e.status === "active")
+    .sort((a, b) => (b.overall_score ?? 0) - (a.overall_score ?? 0))
+    .slice(0, 5);
 
   const [tasksRes, awardsRes, warningsRes, notificationsRes] =
     await Promise.all([
@@ -148,18 +146,22 @@ export async function VolunteerDashboard({ user }: { user: AuthedUser }) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-gold-500" />
-                ترتيبي في المجموعة
+                ترتيبي العام
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {boards.map(({ team, rank }) => (
-                <div key={team.id} className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-700">{team.name}</span>
-                  <Badge tone={rank && rank <= 3 ? "gold" : "teal"}>
-                    {rank ? `#${rank}` : "بدون ترتيب"}
-                  </Badge>
-                </div>
-              ))}
+            <CardContent>
+              <p className="text-3xl font-extrabold text-slate-900">
+                {globalRank ? `#${globalRank}` : "—"}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                من بين {board.filter((e) => e.status === "active").length} متطوع نشط في الترتيب العام
+              </p>
+              <Link
+                href="/leaderboard"
+                className="mt-3 inline-block text-xs font-semibold text-brand-700 hover:text-brand-800"
+              >
+                عرض لوحة الترتيب الكاملة
+              </Link>
             </CardContent>
           </Card>
         </div>
@@ -264,36 +266,34 @@ export async function VolunteerDashboard({ user }: { user: AuthedUser }) {
         </Card>
       </div>
 
-      {/* Team leaderboards */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {boards.map(({ team, board }) => (
-          <Card key={team.id}>
-            <CardHeader>
-              <CardTitle>ترتيب مجموعة {team.name}</CardTitle>
-              <Link href={`/leaderboard?team=${team.id}`} className="flex items-center text-xs font-semibold text-brand-700 hover:text-brand-800">
-                عرض الكل <ChevronLeft className="h-3.5 w-3.5" />
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {board
-                .filter((e) => e.status === "active")
-                .sort((a, b) => (b.overall_score ?? 0) - (a.overall_score ?? 0))
-                .slice(0, 5)
-                .map((e, i) => (
-                  <div key={e.volunteer_id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                    <span className={`w-6 text-center text-sm font-extrabold ${i < 3 ? "text-gold-500" : "text-slate-400"}`}>
-                      {i + 1}
-                    </span>
-                    <Avatar name={e.full_name} src={e.avatar_url} size="sm" />
-                    <span className="flex-1 truncate text-sm font-semibold text-slate-800">
-                      {e.full_name}
-                    </span>
-                    <Badge tone={i < 3 ? "gold" : "slate"}>{e.overall_score ?? 0}</Badge>
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
-        ))}
+      {/* Top volunteers */}
+      <div className="grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>أفضل المتطوعين</CardTitle>
+            <Link href="/leaderboard" className="flex items-center text-xs font-semibold text-brand-700 hover:text-brand-800">
+              عرض الكل <ChevronLeft className="h-3.5 w-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {topVolunteers.length === 0 ? (
+              <EmptyState title="لا توجد بيانات ترتيب بعد" />
+            ) : (
+              topVolunteers.map((e, i) => (
+                <div key={e.volunteer_id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                  <span className={`w-6 text-center text-sm font-extrabold ${i < 3 ? "text-gold-500" : "text-slate-400"}`}>
+                    {i + 1}
+                  </span>
+                  <Avatar name={e.full_name} src={e.avatar_url} size="sm" />
+                  <span className="flex-1 truncate text-sm font-semibold text-slate-800">
+                    {e.full_name}
+                  </span>
+                  <Badge tone={i < 3 ? "gold" : "slate"}>{e.overall_score ?? 0}</Badge>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

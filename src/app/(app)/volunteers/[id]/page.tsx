@@ -32,26 +32,30 @@ export default async function VolunteerProfilePage({
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", id).single();
   if (!profile) notFound();
 
-  // Access control: self, admin, or leader of one of the volunteer's teams
+  // Committees the profile is a roster member of (links profile -> roster).
+  const { data: linkedVolunteers } = await supabase
+    .from("volunteer_details")
+    .select("id, profile_id, committees, leadership")
+    .eq("profile_id", id);
+
+  const theirCommittees = (linkedVolunteers ?? []).flatMap((v) =>
+    (v.committees as Array<{ id: string }>).map((c) => c.id),
+  );
+  const theirLeadership = (linkedVolunteers ?? []).flatMap((v) =>
+    (v.leadership as Array<{ committee_id: string }>).map((l) => l.committee_id),
+  );
+
+  // Access control: self, admin, or committee leader of one of the
+  // volunteer's committees.
   if (profile.id !== user.id && !user.isAdmin) {
-    const { data: teams } = await supabase
-      .from("team_members")
-      .select("team_id")
-      .eq("volunteer_id", id);
-    const isLeaderOfMember = (teams ?? []).some((t) => user.ledTeamIds.includes(t.team_id));
-    if (!isLeaderOfMember) redirect("/dashboard");
+    const canView = theirCommittees.some((c) => user.ledCommitteeIds.includes(c));
+    if (!canView) redirect("/dashboard");
   }
 
   const isAdminView = user.isAdmin;
-  const [score, memberships] = await Promise.all([
-    getScore(id),
-    supabase
-      .from("team_members")
-      .select("team_id, teams!inner(id, name, color, eval_mode)")
-      .eq("volunteer_id", id),
-  ]);
+  const score = await getScore(id);
 
-  const [attendanceRes, evalsRes, tasksRes, awardsRes, warningsRes, ledRes] =
+  const [attendanceRes, evalsRes, tasksRes, awardsRes, warningsRes] =
     await Promise.all([
       supabase
         .from("convoy_attendance")
@@ -81,7 +85,6 @@ export default async function VolunteerProfilePage({
         .select("*, profiles!warnings_issued_by_fkey(full_name)")
         .eq("volunteer_id", id)
         .order("warning_date", { ascending: false }),
-      supabase.from("team_leaders").select("team_id, teams!inner(id, name)").eq("leader_id", id),
     ]);
 
   const attendance = attendanceRes.data ?? [];
@@ -89,7 +92,6 @@ export default async function VolunteerProfilePage({
   const tasks = tasksRes.data ?? [];
   const awards = awardsRes.data ?? [];
   const warnings = warningsRes.data ?? [];
-  const ledTeams = (ledRes.data ?? []).map((l) => l.teams) as unknown as Array<{ id: string; name: string }>;
 
   const pendingTasks = tasks.filter((t) => t.status === "pending" || t.status === "in_progress").length;
   const submittedTasks = tasks.filter((t) => t.status === "submitted").length;
@@ -111,15 +113,18 @@ export default async function VolunteerProfilePage({
             <StatusBadge status={profile.status} />
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            {(memberships.data ?? []).map((m) => (
-              <Badge key={m.team_id} tone="teal">
-                {(m.teams as unknown as { name: string }).name}
+            {[...new Set(theirCommittees)].length > 0 && (
+              <Badge tone="teal">
+                اللجان:{" "}
+                {[...new Map(
+                  (linkedVolunteers ?? []).flatMap((v) =>
+                    (v.committees as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
+                  ),
+                ).values()].join("، ")}
               </Badge>
-            ))}
-            {ledTeams.length > 0 && (
-              <Badge tone="blue">
-                قائد: {ledTeams.map((t) => t.name).join("، ")}
-              </Badge>
+            )}
+            {theirLeadership.length > 0 && (
+              <Badge tone="blue">قائد لجنة</Badge>
             )}
           </div>
           <p className="mt-2 text-xs text-slate-400">

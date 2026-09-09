@@ -2,135 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getSettings } from "@/lib/actions/settings";
 import { warningAtRiskThreshold } from "@/lib/warnings";
 
-export interface TeamActivity {
-  team_id: string;
-  name: string;
-  color: string;
-  eval_mode: string;
-  member_count: number;
-  attendance_rate: number | null;
-  task_completion: number | null;
-  avg_performance: number | null; // 1-5
-  convoy_count: number;
-  avg_score: number | null;
-  activity_score: number; // 0-100 weighted, transparent formula
-}
-
-const weight = { attendance: 0.4, tasks: 0.3, performance: 0.2, score: 0.1 };
-
-export async function getTeamActivity(): Promise<TeamActivity[]> {
-  const supabase = await createClient();
-
-  const [teamsRes, membersRes, attendanceRes, tasksRes, evalsRes, scoresRes] =
-    await Promise.all([
-      supabase.from("teams").select("id, name, color, eval_mode"),
-      supabase.from("team_members").select("team_id"),
-      supabase
-        .from("convoy_attendance")
-        .select("team_id, status, convoy_id, convoys(status)")
-        .in("convoys.status", ["completed"]),
-      supabase
-        .from("task_assignments")
-        .select("status, tasks(team_id)"),
-      supabase
-        .from("convoy_evaluations")
-        .select("team_id, rating"),
-      supabase.rpc("get_leaderboard"),
-    ]);
-
-  const teams = teamsRes.data ?? [];
-  const memberCount = new Map<string, number>();
-  for (const m of membersRes.data ?? []) {
-    memberCount.set(m.team_id, (memberCount.get(m.team_id) ?? 0) + 1);
-  }
-
-  const attendanceByTeam = new Map<
-    string,
-    { points: number; count: number; convoys: Set<string> }
-  >();
-  for (const a of attendanceRes.data ?? []) {
-    const t = a.convoy_id;
-    const entry = attendanceByTeam.get(a.team_id) ?? {
-      points: 0,
-      count: 0,
-      convoys: new Set<string>(),
-    };
-    entry.count += 1;
-    entry.convoys.add(t);
-    entry.points += a.status === "present" ? 1 : a.status === "excused" ? 0.5 : 0;
-    attendanceByTeam.set(a.team_id, entry);
-  }
-
-  const tasksByTeam = new Map<string, { approved: number; total: number }>();
-  for (const ta of tasksRes.data ?? []) {
-    const teamId = (ta.tasks as unknown as { team_id: string } | null)?.team_id;
-    if (!teamId) continue;
-    const entry = tasksByTeam.get(teamId) ?? { approved: 0, total: 0 };
-    entry.total += 1;
-    if (ta.status === "approved") entry.approved += 1;
-    tasksByTeam.set(teamId, entry);
-  }
-
-  const evalByTeam = new Map<string, { sum: number; count: number }>();
-  for (const e of evalsRes.data ?? []) {
-    const entry = evalByTeam.get(e.team_id) ?? { sum: 0, count: 0 };
-    entry.sum += e.rating;
-    entry.count += 1;
-    evalByTeam.set(e.team_id, entry);
-  }
-
-  const scoreByTeam = new Map<string, { sum: number; count: number }>();
-  for (const s of scoresRes.data ?? []) {
-    if (s.status !== "active") continue;
-    const entry = scoreByTeam.get(s.team_id) ?? { sum: 0, count: 0 };
-    entry.sum += s.overall_score ?? 0;
-    entry.count += 1;
-    scoreByTeam.set(s.team_id, entry);
-  }
-
-  const result: TeamActivity[] = teams.map((team) => {
-    const att = attendanceByTeam.get(team.id);
-    const attendanceRate =
-      att && att.count > 0 ? (att.points / att.count) * 100 : null;
-    const tasks = tasksByTeam.get(team.id);
-    const taskCompletion =
-      tasks && tasks.total > 0 ? (tasks.approved / tasks.total) * 100 : null;
-    const ev = evalByTeam.get(team.id);
-    const avgPerformance = ev && ev.count > 0 ? ev.sum / ev.count : null;
-    const sc = scoreByTeam.get(team.id);
-    const avgScore = sc && sc.count > 0 ? sc.sum / sc.count : null;
-
-    const attendancePart = (attendanceRate ?? 0) * weight.attendance;
-    const taskPart = (taskCompletion ?? 0) * weight.tasks;
-    const perfPart = (avgPerformance ?? 0) * 20 * weight.performance;
-    const scorePart = (avgScore ?? 0) * weight.score;
-    const activityScore = Math.round(attendancePart + taskPart + perfPart + scorePart);
-
-    return {
-      team_id: team.id,
-      name: team.name,
-      color: team.color,
-      eval_mode: team.eval_mode,
-      member_count: memberCount.get(team.id) ?? 0,
-      attendance_rate: attendanceRate === null ? null : Math.round(attendanceRate * 10) / 10,
-      task_completion: taskCompletion === null ? null : Math.round(taskCompletion * 10) / 10,
-      avg_performance: avgPerformance === null ? null : Math.round(avgPerformance * 100) / 100,
-      convoy_count: att?.convoys.size ?? 0,
-      avg_score: avgScore === null ? null : Math.round(avgScore * 10) / 10,
-      activity_score: activityScore,
-    };
-  });
-
-  return result.sort((a, b) => b.activity_score - a.activity_score);
-}
-
 export async function getAdminOverview() {
   const supabase = await createClient();
-  const settings = await getSettings();
 
-  const [profiles, teams, convoys, scores, warnings, awards] = await Promise.all([
+  const [settings, profiles, convoys, scores, warnings, awards] = await Promise.all([
+    getSettings(),
     supabase.from("profiles").select("status"),
-    supabase.from("teams").select("id"),
     supabase
       .from("convoys")
       .select("*")
@@ -183,7 +60,6 @@ export async function getAdminOverview() {
     totalVolunteers: allProfiles.length,
     activeVolunteers: active,
     bannedVolunteers: banned,
-    totalTeams: teams.data?.length ?? 0,
     upcoming: upcoming[0] ?? null,
     upcomingCount: upcoming.length,
     activeConvoys,

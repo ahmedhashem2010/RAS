@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, CalendarClock, Users } from "lucide-react";
+import { ArrowRight, CalendarClock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,20 +21,15 @@ export default async function TaskDetailPage({
   const { data: task } = await supabase.from("tasks").select("*").eq("id", id).single();
   if (!task) notFound();
 
-  const [teamRes, assignmentsRes, ledRes] = await Promise.all([
-    supabase.from("teams").select("id, name").eq("id", task.team_id ?? "").maybeSingle(),
-    supabase
-      .from("task_assignments")
-      .select("*")
-      .eq("task_id", id)
-      .order("created_at"),
-    supabase.from("team_leaders").select("team_id").eq("leader_id", user.id),
-  ]);
+  const { data: assignmentsRes } = await supabase
+    .from("task_assignments")
+    .select("*")
+    .eq("task_id", id)
+    .order("created_at");
 
-  const ledTeams = (ledRes.data ?? []).map((l) => l.team_id);
-  const canManage = user.isAdmin || (task.team_id && ledTeams.includes(task.team_id));
+  const canManage = user.isAdmin || task.created_by === user.id;
 
-  const assignmentRows = assignmentsRes.data ?? [];
+  const assignmentRows = assignmentsRes ?? [];
   const profileIds = [
     ...new Set([
       task.created_by,
@@ -58,13 +53,12 @@ export default async function TaskDetailPage({
   }));
 
   const myAssignment = assignments.find((a) => a.volunteer_id === user.id) ?? null;
-  const teamName = (teamRes.data as { name?: string } | null)?.name ?? "مجموعة";
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title={task.title}
-        description={`${teamName} · أنشأها ${nameOf(task.created_by)}`}
+        description={`مهمة عامة · أنشأها ${nameOf(task.created_by)}`}
         action={
           <Link href="/tasks" className="inline-flex h-10 items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900">
             <ArrowRight className="h-4 w-4" />
@@ -81,10 +75,6 @@ export default async function TaskDetailPage({
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Badge tone="teal">
-              <Users className="h-3 w-3" />
-              {teamName}
-            </Badge>
             {task.deadline && (
               <Badge tone={new Date(task.deadline) < new Date() ? "red" : "blue"}>
                 <CalendarClock className="h-3 w-3" />

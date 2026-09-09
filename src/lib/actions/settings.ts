@@ -4,16 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 
 export interface AppSettings {
   warning_limit: number;
-  leaderboard_visible_to_all: boolean;
 }
 
 const defaultSettings: AppSettings = {
   warning_limit: 3,
-  leaderboard_visible_to_all: false,
 };
 
 function friendly(error: unknown, fallback: string): ActionResult {

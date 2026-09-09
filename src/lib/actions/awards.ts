@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
-import type { ActionResult } from "./teams";
+import type { ActionResult } from "./result";
 import type { AwardType } from "@/lib/types";
 
 function friendly(error: unknown, fallback: string): ActionResult {
